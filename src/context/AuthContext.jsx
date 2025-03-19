@@ -1,4 +1,4 @@
-import { createContext, useState, useEffect, useContext } from 'react';
+import { createContext, useState, useEffect, useContext, useRef } from 'react';
 import { authAPI } from '../services/api';
 import { shouldUseMockData } from '../utils/apiUtils';
 
@@ -23,33 +23,59 @@ const MOCK_ADMIN = {
 
 // Auth provider component
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('token') || null);
+  // Initialize state from localStorage if available
+  const storedUser = localStorage.getItem('user');
+  const storedToken = localStorage.getItem('token');
+  
+  const [user, setUser] = useState(storedUser ? JSON.parse(storedUser) : null);
+  const [token, setToken] = useState(storedToken || null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
+  
+  // Use a ref to prevent multiple simultaneous auth checks
+  const isCheckingAuth = useRef(false);
+  // Track last check time to limit frequency
+  const lastCheckTime = useRef(0);
 
   // Check if user is logged in on initial load
   useEffect(() => {
     const checkLoggedIn = async () => {
+      // Skip if already checking or if checked recently (within 60 seconds)
+      const now = Date.now();
+      if (isCheckingAuth.current || (now - lastCheckTime.current < 60000)) {
+        return;
+      }
+      
+      isCheckingAuth.current = true;
+      lastCheckTime.current = now;
+      
       try {
-        const storedToken = localStorage.getItem('token');
         if (storedToken) {
-          setToken(storedToken);
           try {
-            // Fetch the user data
-            console.log('Fetching current user data...');
-            const userData = await authAPI.getCurrentUser();
-            console.log('User data received:', userData);
-            
-            // Store the user data in localStorage for backup
-            localStorage.setItem('user', JSON.stringify(userData));
-            
-            setUser(userData);
+            // Only fetch user data if not already available or on initial mount
+            if (!authChecked || !user) {
+              // Fetch the user data
+              console.log('Fetching current user data...');
+              const userData = await authAPI.getCurrentUser();
+              console.log('User data received:', userData);
+              
+              if (userData) {
+                // Update stored user data
+                localStorage.setItem('user', JSON.stringify(userData));
+                setUser(userData);
+              } else {
+                // If no user data, clear auth state
+                console.warn('No user data received, clearing auth state');
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                setToken(null);
+                setUser(null);
+              }
+            }
           } catch (fetchError) {
             console.error('Error fetching user data:', fetchError);
             
-            // Only clear token if it's an authentication error
             if (fetchError.message.includes('401') || 
                 fetchError.message.includes('unauthorized') || 
                 fetchError.message.includes('token')) {
@@ -58,39 +84,24 @@ export const AuthProvider = ({ children }) => {
               localStorage.removeItem('user');
               setToken(null);
               setUser(null);
-            } else {
-              // For other errors (like network errors), keep the user logged in
-              console.warn('Non-authentication error, trying to use stored user data');
-              // Try to parse user from localStorage if available
-              const storedUser = localStorage.getItem('user');
-              if (storedUser) {
-                try {
-                  const parsedUser = JSON.parse(storedUser);
-                  console.log('Using stored user data:', parsedUser);
-                  setUser(parsedUser);
-                } catch (e) {
-                  console.error('Error parsing stored user:', e);
-                }
-              }
+            } else if (storedUser) {
+              // For non-auth errors, keep using stored user data
+              console.warn('Using stored user data due to non-auth error');
+              setUser(JSON.parse(storedUser));
             }
           }
-        } else {
-          // No token found, ensure user is logged out
-          console.log('No token found, user is logged out');
-          localStorage.removeItem('user');
-          setToken(null);
-          setUser(null);
         }
       } catch (err) {
         console.error('Failed to fetch user:', err);
       } finally {
         setLoading(false);
         setAuthChecked(true);
+        isCheckingAuth.current = false;
       }
     };
 
     checkLoggedIn();
-  }, []);
+  }, [storedToken]); // Remove storedUser from dependencies to prevent loops
 
   // Login function
   const login = async (credentials) => {
@@ -98,7 +109,6 @@ export const AuthProvider = ({ children }) => {
     setError(null);
     try {
       console.log('Attempting login with credentials:', credentials.username);
-      // Use real login
       const data = await authAPI.login(credentials);
       
       console.log('Login successful, storing user data and token');
@@ -112,6 +122,11 @@ export const AuthProvider = ({ children }) => {
       return data.user;
     } catch (err) {
       console.error('Login error:', err);
+      // Clear any existing data on login error
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      setToken(null);
+      setUser(null);
       setError(err.message || 'Failed to login');
       throw err;
     } finally {
@@ -149,11 +164,13 @@ export const AuthProvider = ({ children }) => {
   // Logout function
   const logout = () => {
     console.log('Logging out user');
+    // Clear all auth-related data
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    localStorage.removeItem('isAdmin'); // Also clear any mock data flags
+    localStorage.removeItem('isAdmin');
     setToken(null);
     setUser(null);
+    setError(null);
     return Promise.resolve();
   };
 

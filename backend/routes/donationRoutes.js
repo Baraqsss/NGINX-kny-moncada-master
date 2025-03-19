@@ -1,21 +1,40 @@
 import express from 'express';
-import * as donationController from '../controllers/donationController.js';
+import multer from 'multer';
 import { protect, restrictTo } from '../middleware/authMiddleware.js';
+import {
+  getDonations,
+  createDonation,
+  deleteDonation,
+  importDonations,
+  exportDonations
+} from '../controllers/donationController.js';
 
 const router = express.Router();
 
-// Public routes for creating donations
-router.post('/', donationController.createDonation);
+// Configure multer for CSV file uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'text/csv') {
+      cb(null, true);
+    } else {
+      cb(new Error('Please upload a CSV file'));
+    }
+  }
+});
 
-// Protected routes
+// Protect all routes
 router.use(protect);
+router.use(restrictTo('Admin'));
 
-// Admin only routes
-router.use(restrictTo('admin'));
-router.get('/', donationController.getAllDonations);
-router.get('/stats', donationController.getDonationStats);
-router.route('/:id')
-  .get(donationController.getDonation)
-  .patch(donationController.updateDonationStatus);
+// Routes
+router.route('/')
+  .get(getDonations)
+  .post(createDonation);
+
+router.delete('/:id', deleteDonation);
+
+router.post('/import', upload.single('file'), importDonations);
+router.get('/export', exportDonations);
 
 export default router;

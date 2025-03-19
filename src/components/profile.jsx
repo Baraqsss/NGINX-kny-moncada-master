@@ -8,25 +8,55 @@ const defaultProfilePic = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/20
 
 const Profile = () => {
   const { user: authUser, token, updateUserData } = useAuth();
-  const [userDetails, setUserDetails] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [userDetails, setUserDetails] = useState(authUser || null);
+  const [isLoading, setIsLoading] = useState(!authUser);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [error, setError] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({});
   const [profileImage, setProfileImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+  const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
-    // Initialize with auth user data immediately to avoid empty state
-    if (authUser) {
-      console.log('Initializing profile with auth user data:', authUser);
-      setUserDetails(authUser);
-      initializeFormData(authUser);
+    if (userDetails) {
+      initializeFormData(userDetails);
     }
-    
-    // Then fetch complete profile details
-    fetchUserDetails();
-  }, [authUser]);
+  }, [userDetails]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!authUser) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        console.log('Fetching detailed user profile...');
+        const response = await fetch('http://localhost:5000/api/users/me', {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch user details');
+        }
+        
+        const { data } = await response.json();
+        console.log('Received user profile data from API:', data);
+        
+        setUserDetails(data.user);
+      } catch (err) {
+        console.error('Error fetching profile:', err);
+        setError(err.message || 'Failed to fetch user details');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [authUser, token]);
 
   const initializeFormData = (userData) => {
     setFormData({
@@ -44,70 +74,6 @@ const Profile = () => {
         country: userData?.address?.country || ''
       }
     });
-  };
-
-  const fetchUserDetails = async () => {
-    if (!authUser) {
-      console.log('No authenticated user, skipping profile fetch');
-      setIsLoading(false);
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      console.log('Fetching detailed user profile...');
-      // Use mock or real API based on environment
-      let userData;
-      
-      if (shouldUseMockData()) {
-        // If using mock data, enhance the auth user with additional details
-        userData = {
-          ...authUser,
-          phone: authUser.phone || '555-123-4567',
-          birthday: authUser.birthday || '1990-01-01',
-          organization: authUser.organization || 'Kaya Natin Youth',
-          committee: authUser.committee || 'Programs and Events',
-          address: authUser.address || {
-            street: '123 Main St',
-            city: 'Moncada',
-            state: 'Tarlac',
-            zipCode: '2400',
-            country: 'Philippines'
-          },
-          age: authUser.age || '33',
-          createdAt: authUser.createdAt || '2023-01-15'
-        };
-        console.log('Using enhanced mock data for profile:', userData);
-      } else {
-        // Make actual API call
-        const response = await fetch('http://localhost:5000/api/users/me', {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        });
-        
-        if (!response.ok) {
-          throw new Error('Failed to fetch user details');
-        }
-        
-        userData = await response.json();
-        console.log('Received user profile data from API:', userData);
-      }
-      
-      setUserDetails(userData);
-      initializeFormData(userData);
-    } catch (err) {
-      console.error('Error fetching profile:', err);
-      setError(err.message || 'Failed to fetch user details');
-      
-      // If we failed to get detailed profile but have basic auth user, still use that
-      if (authUser && !userDetails) {
-        setUserDetails(authUser);
-        initializeFormData(authUser);
-      }
-    } finally {
-      setIsLoading(false);
-    }
   };
 
   const handleInputChange = (e) => {
@@ -141,77 +107,62 @@ const Profile = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setIsLoading(true);
+    setIsUpdating(true);
     setError('');
+    setSuccessMessage('');
 
     try {
       console.log('Submitting profile update:', formData);
-      let updatedUser;
-
-      if (shouldUseMockData()) {
-        // For mock data, just simulate a successful update
-        updatedUser = {
-          ...userDetails,
-          ...formData,
-          profilePicture: imagePreview || userDetails?.profilePicture,
-          // Keep nested address object intact
-          address: formData.address
-        };
-        
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 800));
-        console.log('Mock profile update successful:', updatedUser);
-      } else {
-        // For real API
-        const formDataToSend = new FormData();
-        
-        // Append user data
-        Object.keys(formData).forEach(key => {
-          if (key === 'address') {
-            Object.keys(formData.address).forEach(addressKey => {
-              formDataToSend.append(`address[${addressKey}]`, formData.address[addressKey]);
-            });
-          } else {
-            formDataToSend.append(key, formData[key]);
-          }
-        });
-        
-        // Append profile image if changed
-        if (profileImage) {
-          formDataToSend.append('profilePicture', profileImage);
+      
+      const formDataToSend = new FormData();
+      
+      // Append user data
+      Object.keys(formData).forEach(key => {
+        if (key === 'address') {
+          Object.keys(formData.address).forEach(addressKey => {
+            formDataToSend.append(`address[${addressKey}]`, formData.address[addressKey]);
+          });
+        } else {
+          formDataToSend.append(key, formData[key]);
         }
-
-        // Make the API call
-        const response = await fetch('http://localhost:5000/api/users/profile', {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${token}`
-          },
-          body: formDataToSend
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to update profile');
-        }
-
-        updatedUser = await response.json();
-        console.log('Profile updated successfully:', updatedUser);
+      });
+      
+      // Append profile image if changed
+      if (profileImage) {
+        formDataToSend.append('profilePicture', profileImage);
       }
 
-      // Update local state with new user data
-      setUserDetails(updatedUser);
-      
-      // Update user data in the auth context to keep it in sync
-      updateUserData(updatedUser);
-      
+      // Make the API call
+      const response = await fetch('http://localhost:5000/api/users/profile', {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
+        body: formDataToSend
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update profile');
+      }
+
+      const { data } = await response.json();
+      console.log('Profile updated successfully:', data);
+
+      // Update local state
+      setUserDetails(data.user);
+      updateUserData(data.user);
+      setSuccessMessage('Profile updated successfully!');
       setIsEditing(false);
-      setProfileImage(null);
-      setImagePreview(null);
-    } catch (err) {
-      console.error('Profile update error:', err);
-      setError(err.message || 'Failed to update profile');
+
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        setSuccessMessage('');
+      }, 3000);
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      setError(error.message || 'Failed to update profile');
     } finally {
-      setIsLoading(false);
+      setIsUpdating(false);
     }
   };
 
@@ -225,10 +176,10 @@ const Profile = () => {
     });
   };
 
-  // Display loading state only on initial load
-  if (isLoading && !userDetails) {
+  // Show loading spinner when initially loading
+  if (isLoading) {
     return (
-      <div className="container mx-auto p-4 flex justify-center items-center h-screen">
+      <div className="container mx-auto p-4 flex justify-center items-center min-h-screen">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-violet-700 mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading profile...</p>
@@ -237,7 +188,7 @@ const Profile = () => {
     );
   }
 
-  // If no user details and there's an error
+  // Show error state
   if (error && !userDetails) {
     return (
       <div className="container mx-auto p-4">
@@ -245,7 +196,10 @@ const Profile = () => {
           {error}
         </div>
         <button
-          onClick={fetchUserDetails}
+          onClick={() => {
+            setIsLoading(true);
+            setUserDetails(authUser);
+          }}
           className="bg-violet-700 text-white px-4 py-2 rounded-lg hover:bg-violet-800"
         >
           Try Again
@@ -254,7 +208,7 @@ const Profile = () => {
     );
   }
 
-  // If no user details and no error, show a message
+  // Show message if no user details
   if (!userDetails) {
     return (
       <div className="container mx-auto p-4 text-center">
@@ -264,9 +218,30 @@ const Profile = () => {
   }
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        {/* Profile Header */}
+    <div className="container mx-auto px-4 py-8">
+      <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-md p-6">
+        {/* Error message */}
+        {error && (
+          <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+            {error}
+          </div>
+        )}
+
+        {/* Success message */}
+        {successMessage && (
+          <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded flex justify-between items-center">
+            <span>{successMessage}</span>
+            <button
+              type="button"
+              className="text-green-700"
+              onClick={() => setSuccessMessage('')}
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {/* Profile Content */}
         <div className="bg-gradient-to-r from-violet-600 to-indigo-600 p-6 text-white">
           <div className="flex flex-col md:flex-row items-center">
             <div className="relative mb-4 md:mb-0 md:mr-6">
@@ -308,14 +283,8 @@ const Profile = () => {
           </div>
         </div>
 
-        {/* Profile Content */}
+        {/* Profile Form/Display Content */}
         <div className="p-6">
-          {error && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-              {error}
-            </div>
-          )}
-
           {isEditing ? (
             <form onSubmit={handleSubmit}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -469,19 +438,19 @@ const Profile = () => {
                   onClick={() => {
                     setIsEditing(false);
                     setImagePreview(null);
-                    initializeFormData(userDetails); // Reset form data to current user details
+                    initializeFormData(userDetails);
                   }}
                   className="flex items-center px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-                  disabled={isLoading}
+                  disabled={isUpdating}
                 >
                   <FaTimes className="mr-2" /> Cancel
                 </button>
                 <button
                   type="submit"
                   className="flex items-center px-4 py-2 bg-violet-700 text-white rounded-lg hover:bg-violet-800"
-                  disabled={isLoading}
+                  disabled={isUpdating}
                 >
-                  {isLoading ? (
+                  {isUpdating ? (
                     <>
                       <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></div>
                       Saving...

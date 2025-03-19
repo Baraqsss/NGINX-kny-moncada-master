@@ -53,10 +53,22 @@ export const getEvent = async (req, res) => {
 // Create new event (admin only)
 export const createEvent = async (req, res) => {
   try {
-    const newEvent = await Event.create({
-      ...req.body,
+    const eventData = {
+      title: req.body.title,
+      description: req.body.description,
+      date: new Date(req.body.date),
+      location: req.body.location,
+      capacity: parseInt(req.body.capacity) || 0,
       createdBy: req.user.id
-    });
+    };
+
+    // If an image was uploaded, add its URL to the event data
+    if (req.file) {
+      eventData.image = `/uploads/${req.file.filename}`;
+    }
+
+    console.log('Creating event with data:', eventData);
+    const newEvent = await Event.create(eventData);
     
     res.status(201).json({
       status: 'success',
@@ -65,6 +77,7 @@ export const createEvent = async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('Error creating event:', error);
     res.status(400).json({
       status: 'fail',
       message: error.message
@@ -75,9 +88,16 @@ export const createEvent = async (req, res) => {
 // Update event (admin only)
 export const updateEvent = async (req, res) => {
   try {
+    const updateData = { ...req.body };
+
+    // If a new image was uploaded, update the image URL
+    if (req.file) {
+      updateData.image = `/uploads/${req.file.filename}`;
+    }
+
     const event = await Event.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      updateData,
       {
         new: true,
         runValidators: true
@@ -145,7 +165,7 @@ export const registerForEvent = async (req, res) => {
     if (event.registeredUsers.includes(req.user.id)) {
       return res.status(400).json({
         status: 'fail',
-        message: 'You are already registered for this event'
+        message: 'already registered'
       });
     }
     
@@ -196,13 +216,81 @@ export const showInterestInEvent = async (req, res) => {
     if (event.interestedUsers.includes(req.user.id)) {
       return res.status(400).json({
         status: 'fail',
-        message: 'You have already shown interest in this event'
+        message: 'already shown interest'
       });
     }
     
     // Add user to interested users
     event.interestedUsers.push(req.user.id);
     await event.save();
+    
+    res.status(200).json({
+      status: 'success',
+      data: {
+        event
+      }
+    });
+  } catch (error) {
+    res.status(400).json({
+      status: 'fail',
+      message: error.message
+    });
+  }
+};
+
+// Get events that the user is interested in
+export const getInterestedEvents = async (req, res) => {
+  try {
+    const events = await Event.find({
+      interestedUsers: req.user.id
+    }).sort({ date: 1 });
+    
+    res.status(200).json({
+      status: 'success',
+      data: {
+        events
+      }
+    });
+  } catch (error) {
+    res.status(400).json({
+      status: 'fail',
+      message: error.message
+    });
+  }
+};
+
+// Unregister from an event
+export const unregisterFromEvent = async (req, res) => {
+  try {
+    const event = await Event.findById(req.params.id);
+    
+    if (!event) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'No event found with that ID'
+      });
+    }
+    
+    // Check if user is registered
+    if (!event.registeredUsers.includes(req.user.id)) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'You are not registered for this event'
+      });
+    }
+    
+    // Remove user from registered users
+    event.registeredUsers = event.registeredUsers.filter(
+      userId => userId.toString() !== req.user.id
+    );
+    await event.save();
+    
+    // Remove event from user's registered events
+    const user = await User.findById(req.user.id);
+    user.eventsRegistered = user.eventsRegistered.filter(
+      eventId => eventId.toString() !== event.id
+    );
+    await user.save({ validateBeforeSave: false });
     
     res.status(200).json({
       status: 'success',

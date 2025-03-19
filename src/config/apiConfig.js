@@ -9,7 +9,7 @@ const checkBackendAvailability = async (port) => {
   try {
     console.log(`Checking backend availability on port ${port}...`);
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
     
     const response = await fetch(`http://localhost:${port}/api/health`, {
       signal: controller.signal,
@@ -18,9 +18,17 @@ const checkBackendAvailability = async (port) => {
     });
     
     clearTimeout(timeoutId);
-    return response.ok;
+    
+    if (response.ok) {
+      console.log(`Backend is available on port ${port}`);
+      return true;
+    } else {
+      console.log(`Backend on port ${port} returned status: ${response.status}`);
+      return false;
+    }
   } catch (error) {
-    console.log(`Port ${port} check failed:`, error.name === 'AbortError' ? 'timeout' : error.message);
+    const errorMessage = error.name === 'AbortError' ? 'timeout' : error.message;
+    console.log(`Port ${port} check failed: ${errorMessage}`);
     return false;
   }
 };
@@ -68,14 +76,20 @@ const getUserEndpoints = (baseUrl) => ({
 });
 
 // Event endpoints
+// Updated to support both direct URLs and function notation
 const getEventEndpoints = (baseUrl) => ({
   GET_ALL: `${baseUrl}/events`,
   GET_BY_ID: (id) => `${baseUrl}/events/${id}`,
   CREATE: `${baseUrl}/events`,
   UPDATE: (id) => `${baseUrl}/events/${id}`,
   DELETE: (id) => `${baseUrl}/events/${id}`,
-  TOGGLE_INTEREST: (id) => `${baseUrl}/memberships/interested/${id}`,
-  GET_INTERESTED: `${baseUrl}/memberships/interested`,
+  // Interest endpoints
+  GET_INTERESTED: `${baseUrl}/events/interested`,
+  SHOW_INTEREST: (id) => `${baseUrl}/events/${id}/interest`,
+  // Registration endpoints
+  GET_REGISTERED: `${baseUrl}/events/registered`,
+  REGISTER_EVENT: (id) => `${baseUrl}/events/${id}/register`,
+  UNREGISTER_EVENT: (id) => `${baseUrl}/events/${id}/unregister`,
 });
 
 // Announcement endpoints
@@ -109,6 +123,16 @@ const ANNOUNCEMENT_ENDPOINTS = getAnnouncementEndpoints(API_BASE_URL);
 const DONATION_ENDPOINTS = getDonationEndpoints(API_BASE_URL);
 const ADMIN_ENDPOINTS = getAdminEndpoints(API_BASE_URL);
 
+// Create simplified direct URL versions for easier debugging
+const DIRECT_EVENT_ENDPOINTS = {
+  GET_ALL: API_BASE_URL + '/events',
+  GET_INTERESTED: API_BASE_URL + '/events/interested',
+  SHOW_INTEREST: API_BASE_URL + '/events',  // Will need /interest appended
+  GET_REGISTERED: API_BASE_URL + '/events/registered',
+  REGISTER_EVENT: API_BASE_URL + '/events', // Will need /register appended
+  UNREGISTER_EVENT: API_BASE_URL + '/events', // Will need /unregister appended
+};
+
 export {
   API_BASE_URL,
   findBackendPort,
@@ -119,6 +143,7 @@ export {
   ANNOUNCEMENT_ENDPOINTS,
   DONATION_ENDPOINTS,
   ADMIN_ENDPOINTS,
+  DIRECT_EVENT_ENDPOINTS,
   // Export endpoint generators
   getAuthEndpoints,
   getUserEndpoints,

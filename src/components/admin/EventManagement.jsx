@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { FaPlus, FaEdit, FaTrash, FaPaperclip, FaCalendarAlt, FaMapMarkerAlt, FaUsers } from 'react-icons/fa';
 import { eventsAPI } from '../../services/api';
+import { API_BASE_URL } from '../../config/apiConfig';
 
 const EventManagement = () => {
   const { user } = useAuth();
@@ -18,6 +19,7 @@ const EventManagement = () => {
     capacity: 0,
     image: null
   });
+  const [imagePreview, setImagePreview] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -77,6 +79,7 @@ const EventManagement = () => {
       capacity: 0,
       image: null
     });
+    setImagePreview('');
   };
 
   const openCreateModal = () => {
@@ -85,6 +88,8 @@ const EventManagement = () => {
   };
 
   const openEditModal = (event) => {
+    console.log('Opening edit modal for event:', event);
+    
     // Extract time from date if it exists
     let eventDate = '';
     let eventTime = '';
@@ -97,7 +102,11 @@ const EventManagement = () => {
       }
     }
     
-    setCurrentEvent(event);
+    console.log(`Event ID: ${event._id || event.id}, Date: ${eventDate}, Time: ${eventTime}`);
+    
+    // Store the complete event object
+    setCurrentEvent({...event}); // Create a copy to avoid reference issues
+    
     setFormData({
       title: event.title || '',
       description: event.description || '',
@@ -107,33 +116,42 @@ const EventManagement = () => {
       capacity: event.capacity || 0,
       image: null
     });
+    
     setShowEditModal(true);
   };
 
-  const handleCreateEvent = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
 
     try {
-      // Combine date and time
+      // Combine date and time into a single ISO string
       const dateTime = formData.date && formData.time 
         ? new Date(`${formData.date}T${formData.time}:00`) 
         : new Date();
-      
-      const eventData = {
+
+      const formDataToSend = new FormData();
+      formDataToSend.append('title', formData.title);
+      formDataToSend.append('description', formData.description);
+      formDataToSend.append('date', dateTime.toISOString());
+      formDataToSend.append('location', formData.location);
+      formDataToSend.append('capacity', formData.capacity);
+      if (formData.image) {
+        formDataToSend.append('image', formData.image);
+      }
+
+      console.log('Creating event with data:', {
         title: formData.title,
         description: formData.description,
         date: dateTime.toISOString(),
         location: formData.location,
         capacity: formData.capacity,
-        createdBy: user._id || user.id
-      };
+        hasImage: !!formData.image
+      });
+
+      await eventsAPI.createEvent(formDataToSend);
       
-      console.log('Creating event with data:', eventData);
-      await eventsAPI.createEvent(eventData);
-      
-      // Refresh events list
       fetchEvents();
       setShowCreateModal(false);
       resetForm();
@@ -142,6 +160,18 @@ const EventManagement = () => {
       setError('Failed to create event: ' + (err.message || 'Unknown error'));
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setFormData({ ...formData, image: file });
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -164,9 +194,20 @@ const EventManagement = () => {
         capacity: formData.capacity
       };
       
-      console.log('Updating event with data:', eventData);
+      // Get the event ID, handling both _id and id formats
       const eventId = currentEvent._id || currentEvent.id;
-      await eventsAPI.updateEvent(eventId, eventData);
+      
+      console.log('Current event:', currentEvent);
+      console.log('Updating event with ID:', eventId);
+      console.log('Update data:', eventData);
+      
+      if (!eventId) {
+        throw new Error('Could not determine event ID for update');
+      }
+      
+      // Update the event
+      const response = await eventsAPI.updateEvent(eventId, eventData);
+      console.log('Event updated successfully:', response);
       
       // Refresh events list
       fetchEvents();
@@ -295,7 +336,7 @@ const EventManagement = () => {
                         <span>{formatDate(event.date)}</span>
                       </div>
                       
-                      <div className="flex items-center text-sm text-gray-600 mb-2">
+                      <div className="flex items-center text-sm  text-gray-600 mb-2">
                         <FaMapMarkerAlt className="mr-1" />
                         <span>{event.location}</span>
                       </div>
@@ -329,9 +370,21 @@ const EventManagement = () => {
                   {event.image && (
                     <div className="mt-3 flex items-center text-blue-600">
                       <FaPaperclip className="mr-1" />
-                      <a href={event.image} target="_blank" rel="noopener noreferrer">
-                        View Image
-                      </a>
+                      <a href={event.image.startsWith('http') 
+                        ? event.image 
+                        : `${API_BASE_URL}${event.image}`} 
+                       target="_blank" 
+                       rel="noopener noreferrer"
+                       onClick={(e) => {
+                         e.preventDefault();
+                         const imageUrl = event.image.startsWith('http') 
+                           ? event.image 
+                           : `${API_BASE_URL}${event.image}`;
+                         window.open(imageUrl, '_blank');
+                       }}
+                     >
+                       View Image
+                     </a>
                     </div>
                   )}
                 </div>
@@ -346,7 +399,7 @@ const EventManagement = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
             <h2 className="text-xl font-bold mb-4">Create New Event</h2>
-            <form onSubmit={handleCreateEvent}>
+            <form onSubmit={handleSubmit}>
               <div className="mb-4">
                 <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="title">
                   Title
@@ -357,7 +410,7 @@ const EventManagement = () => {
                   name="title"
                   value={formData.title}
                   onChange={handleInputChange}
-                  className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                  className="shadow appearance-none border rounded w-full py-2 px-3 text-white bg-[#9985be] leading-tight focus:outline-none focus:shadow-outline"
                   required
                 />
               </div>
@@ -371,7 +424,7 @@ const EventManagement = () => {
                   name="description"
                   value={formData.description}
                   onChange={handleInputChange}
-                  className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline h-32"
+                  className="shadow appearance-none border rounded w-full py-2 px-3 text-white bg-[#9985be] leading-tight focus:outline-none focus:shadow-outline h-32"
                   required
                 />
               </div>
@@ -387,7 +440,7 @@ const EventManagement = () => {
                     name="date"
                     value={formData.date}
                     onChange={handleInputChange}
-                    className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                    className="shadow appearance-none border rounded w-full py-2 px-3 text-white bg-[#9985be] leading-tight focus:outline-none focus:shadow-outline"
                     required
                   />
                 </div>
@@ -401,7 +454,7 @@ const EventManagement = () => {
                     name="time"
                     value={formData.time}
                     onChange={handleInputChange}
-                    className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                    className="shadow appearance-none border rounded w-full py-2 px-3 text-white bg-[#9985be] leading-tight focus:outline-none focus:shadow-outline"
                     required
                   />
                 </div>
@@ -417,7 +470,7 @@ const EventManagement = () => {
                   name="location"
                   value={formData.location}
                   onChange={handleInputChange}
-                  className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                  className="shadow appearance-none border rounded w-full py-2 px-3 text-white bg-[#9985be] leading-tight focus:outline-none focus:shadow-outline"
                   required
                 />
               </div>
@@ -433,8 +486,62 @@ const EventManagement = () => {
                   value={formData.capacity}
                   onChange={handleInputChange}
                   min="0"
-                  className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                  className="shadow appearance-none border rounded w-full py-2 px-3 text-white bg-[#9985be] leading-tight focus:outline-none focus:shadow-outline"
                 />
+              </div>
+              
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Event Image
+                </label>
+                <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
+                  <div className="space-y-1 text-center">
+                    {imagePreview ? (
+                      <div className="mb-4">
+                        <img
+                          src={imagePreview}
+                          alt="Preview"
+                          className="mx-auto h-32 w-auto"
+                        />
+                      </div>
+                    ) : (
+                      <svg
+                        className="mx-auto h-12 w-12 text-gray-400"
+                        stroke="currentColor"
+                        fill="none"
+                        viewBox="0 0 48 48"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
+                          strokeWidth={2}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    )}
+                    <div className="flex text-sm text-gray-600">
+                      <label
+                        htmlFor="file-upload"
+                        className="relative cursor-pointer bg-white rounded-md font-medium text-violet-600 hover:text-violet-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-violet-500"
+                      >
+                        <span>Upload a file</span>
+                        <input
+                          id="file-upload"
+                          name="file-upload"
+                          type="file"
+                          className="sr-only"
+                          accept="image/*"
+                          onChange={handleImageChange}
+                        />
+                      </label>
+                      <p className="pl-1">or drag and drop</p>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      PNG, JPG, GIF up to 10MB
+                    </p>
+                  </div>
+                </div>
               </div>
               
               <div className="flex justify-end space-x-2">
@@ -474,7 +581,7 @@ const EventManagement = () => {
                   name="title"
                   value={formData.title}
                   onChange={handleInputChange}
-                  className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                  className="shadow appearance-none border rounded w-full py-2 px-3 bg-[#9985be] text-white leading-tight focus:outline-none focus:shadow-outline"
                   required
                 />
               </div>
@@ -488,7 +595,7 @@ const EventManagement = () => {
                   name="description"
                   value={formData.description}
                   onChange={handleInputChange}
-                  className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline h-32"
+                  className="shadow appearance-none border rounded w-full py-2 px-3 bg-[#9985be] text-white leading-tight focus:outline-none focus:shadow-outline h-32"
                   required
                 />
               </div>
@@ -504,7 +611,7 @@ const EventManagement = () => {
                     name="date"
                     value={formData.date}
                     onChange={handleInputChange}
-                    className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                    className="shadow appearance-none border rounded w-full py-2 px-3 bg-[#9985be] text-white leading-tight focus:outline-none focus:shadow-outline"
                     required
                   />
                 </div>
@@ -518,7 +625,7 @@ const EventManagement = () => {
                     name="time"
                     value={formData.time}
                     onChange={handleInputChange}
-                    className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                    className="shadow appearance-none border rounded w-full py-2 px-3 bg-[#9985be] text-white leading-tight focus:outline-none focus:shadow-outline"
                     required
                   />
                 </div>
@@ -534,7 +641,7 @@ const EventManagement = () => {
                   name="location"
                   value={formData.location}
                   onChange={handleInputChange}
-                  className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                  className="shadow appearance-none border rounded w-full py-2 px-3 bg-[#9985be] text-white leading-tight focus:outline-none focus:shadow-outline"
                   required
                 />
               </div>
@@ -550,7 +657,7 @@ const EventManagement = () => {
                   value={formData.capacity}
                   onChange={handleInputChange}
                   min="0"
-                  className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                  className="shadow appearance-none border rounded w-full py-2 px-3 bg-[#9985be] text-white leading-tight focus:outline-none focus:shadow-outline"
                 />
               </div>
               

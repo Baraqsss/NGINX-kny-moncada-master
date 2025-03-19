@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FaPaperclip, FaClock } from 'react-icons/fa';
-import { ANNOUNCEMENT_ENDPOINTS } from '../config/apiConfig';
-import { get } from '../utils/apiUtils';
+import { announcementsAPI } from '../services/api';
+import { API_BASE_URL } from '../config/apiConfig';
 
 const Announcements = () => {
   const [announcements, setAnnouncements] = useState([]);
@@ -14,12 +14,44 @@ const Announcements = () => {
 
   const fetchAnnouncements = async () => {
     setIsLoading(true);
+    setError('');
+    
     try {
-      const data = await get(ANNOUNCEMENT_ENDPOINTS.GET_ALL);
-      setAnnouncements(data);
+      console.log('Fetching announcements...');
+      const response = await announcementsAPI.getAllAnnouncements();
+      console.log('Announcements response:', response);
+      
+      // Process the API response based on its structure
+      let announcementsData = [];
+      
+      if (response?.data?.announcements && Array.isArray(response.data.announcements)) {
+        // Standard API format { data: { announcements: [] } }
+        announcementsData = response.data.announcements;
+      } else if (response?.announcements && Array.isArray(response.announcements)) {
+        // Alternative format { announcements: [] }
+        announcementsData = response.announcements;
+      } else if (Array.isArray(response)) {
+        // Direct array response
+        announcementsData = response;
+      } else if (response?.data && Array.isArray(response.data)) {
+        // Simple wrapper { data: [] }
+        announcementsData = response.data;
+      } else {
+        console.error('Unexpected response format:', response);
+        setError('Unexpected data format received from server');
+        setAnnouncements([]);
+        setIsLoading(false);
+        return;
+      }
+      
+      if (announcementsData.length === 0) {
+        console.log('No announcements found');
+      }
+      
+      setAnnouncements(announcementsData);
     } catch (err) {
-      setError('Failed to fetch announcements: ' + err.message);
-      console.error(err);
+      console.error('Failed to fetch announcements:', err);
+      setError(`Error: ${err.message || 'Unknown error'}`);
     } finally {
       setIsLoading(false);
     }
@@ -79,6 +111,12 @@ const Announcements = () => {
       {error && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
           {error}
+          <button 
+            onClick={fetchAnnouncements} 
+            className="ml-4 bg-red-600 hover:bg-red-700 text-white py-1 px-3 rounded text-sm"
+          >
+            Try Again
+          </button>
         </div>
       )}
 
@@ -93,7 +131,7 @@ const Announcements = () => {
             <div className="text-center py-8 text-gray-500">No announcements available.</div>
           ) : (
             announcements.map((announcement) => (
-              <div key={announcement._id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300">
+              <div key={announcement._id || announcement.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300">
                 <div className="p-6">
                   <h2 className="text-xl font-semibold text-gray-800 mb-2">{announcement.title}</h2>
                   
@@ -105,8 +143,25 @@ const Announcements = () => {
                   </div>
                   
                   <div className="prose max-w-none text-gray-700 mb-4 whitespace-pre-line">
-                    {announcement.message}
+                    {announcement.content || announcement.message}
                   </div>
+                  
+                  {announcement.image && (
+                    <div className="mt-4">
+                      <img 
+                        src={announcement.image.startsWith('http') 
+                          ? announcement.image 
+                          : `http://localhost:5000${announcement.image}`} 
+                        alt={announcement.title}
+                        className="w-full max-h-96 object-cover rounded-lg shadow-md"
+                        onError={(e) => {
+                          console.error('Failed to load announcement image:', announcement.image);
+                          e.target.onerror = null;
+                          e.target.src = "data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' width='800' height='400' viewBox='0 0 800 400'%3e%3crect fill='%23f8f9fa' width='800' height='400'/%3e%3ctext fill='%23adb5bd' font-family='Arial,sans-serif' font-size='32' font-weight='bold' text-anchor='middle' x='400' y='210'%3eAnnouncement Image%3c/text%3e%3c/svg%3e";
+                        }}
+                      />
+                    </div>
+                  )}
                   
                   {announcement.attachmentUrl && (
                     <div className="mt-4 flex items-center text-blue-600">

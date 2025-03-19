@@ -63,32 +63,7 @@ const Donate = () => {
                                     />
                                     GCash
                                 </button>
-                                <button
-                                    className="bg-white border border-gray-300 rounded-lg py-2 px-4 mr-2 flex items-center"
-                                    onClick={() => handlePaymentClick("Card Payment")}
-                                >
-                                    <img
-                                        alt="Card Payment logo"
-                                        className="mr-2"
-                                        src="https://storage.googleapis.com/a1aa/image/ULvy79jt5Lpr584Kh2q7qJxUinRKlyuPIWrKqvBBKxM.jpg"
-                                        width="50"
-                                        height="30"
-                                    />
-                                    Card Payment
-                                </button>
-                                <button
-                                    className="bg-white border border-gray-300 rounded-lg py-2 px-4 flex items-center"
-                                    onClick={() => handlePaymentClick("Bank Payment")}
-                                >
-                                    <img
-                                        alt="Bank Payment logo"
-                                        className="mr-2"
-                                        src="https://storage.googleapis.com/a1aa/image/DWxEy2cI2n10Ws4APp4uSmJf5eKqDHzOS71ozkElcSg.jpg"
-                                        width="50"
-                                        height="30"
-                                    />
-                                    Bank Payment
-                                </button>
+                                
                             </div>
 
                             {/* Accordion Content */}

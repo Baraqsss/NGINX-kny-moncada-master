@@ -11,7 +11,10 @@ const announcementSchema = new mongoose.Schema({
     required: [true, 'An announcement must have content'],
     trim: true
   },
-  image: String,
+  image: {
+    type: String,
+    default: null
+  },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -27,7 +30,8 @@ const announcementSchema = new mongoose.Schema({
     default: 'medium'
   },
   expiresAt: {
-    type: Date
+    type: Date,
+    default: null
   }
 });
 

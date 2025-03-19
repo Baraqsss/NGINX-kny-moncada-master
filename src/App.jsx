@@ -26,6 +26,7 @@ import AnnouncementManagement from "./components/admin/AnnouncementManagement.js
 import DonationManagement from "./components/admin/DonationManagement.jsx";
 import TestAdmin from "./components/TestAdmin.jsx";
 
+
 function App() {
   return (
     <AuthProvider>
@@ -64,6 +65,7 @@ function App() {
               <Route path="/admin/dashboard/donations" element={<Dashboard />} />
             </Route>
           </Route>
+
 
           {/* Catch-all route for unmatched paths */}
           <Route path="*" element={<Home />} />

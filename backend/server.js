@@ -9,6 +9,7 @@ import eventRoutes from './routes/eventRoutes.js';
 import announcementRoutes from './routes/announcementRoutes.js';
 import donationRoutes from './routes/donationRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
+import emailRoutes from './routes/emailRoutes.js';
 
 // Load environment variables
 dotenv.config();
@@ -39,6 +40,7 @@ app.use('/api/events', eventRoutes);
 app.use('/api/announcements', announcementRoutes);
 app.use('/api/donations', donationRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/email', emailRoutes);
 
 // Root route
 app.get('/', (req, res) => {
@@ -72,7 +74,6 @@ const startServer = (port) => {
     console.error('Failed to start server:', error);
   }
 };
-
 
 console.log('MONGODB_URI:', process.env.MONGODB_URI);
 // Start server

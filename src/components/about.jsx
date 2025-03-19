@@ -154,24 +154,7 @@ const About = () => {
 
                     </div>
 
-                    {/* Partners Section */}
-                    <div className="w-full flex flex-col items-center">
-                        <h3 className="text-2xl font-bold text-red-600 mb-6">Partners</h3>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-12 gap-y-6 max-w-6xl px-4">
-                            {Array.from({length: 8}).map((_, index) => (
-                                <div key={index} className="flex flex-col items-center">
-                                    <img
-                                        alt={`Partner Logo ${index + 1}`}
-                                        src={`https://via.placeholder.com/150?text=Logo+${index + 1}`}
-                                        className="h-24 w-24 rounded-lg shadow-lg"
-                                    />
-                                    <p className="text-sm text-gray-600 mt-2">{`Organization ${
-                                        index + 1
-                                    }`}</p>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
+
                 </div>
             </section>
 
@@ -188,11 +171,23 @@ const About = () => {
                         <div className="border-t border-gray-400 flex-grow"></div>
                     </div>
 
+                 
+
                     <div className="flex flex-wrap justify-center items-center">
                         {[
-                            {name: "Member 1", position: "Position 1"},
-                            {name: "Member 2", position: "Position 2"},
-                            {name: "Member 3", position: "Position 3"},
+                            {name: "Noli James N. Cesario", position: "Chairperson"},
+                            {name: "Jayvee B. Natividad", position: "Vice Chairperson"},
+                            {name: "Sofia Mari R. Daileg", position: "Secretary General"},
+                            {name: "Nicole Rianie Tilos", position: "Finance"},
+                            {name: "Marc Vincent Facun", position: "Auditor"},
+                            {name: "Lara Angelina Maye L. Yabis", position: "Committee on Membership"},
+                            {name: "Enzo B. Pascual", position: "Program and Events Head"},
+                            {name: "John Phillip C. Miranda", position: "Program and Events Head"},
+                            {name: "Leonel O. Yasay III", position: "Social Media and Comms Head"},
+                            {name: "Luke G. Magbalot", position: "Social Media and Comms Head"},
+                            {name: "Christian C. Baldivino", position: "Campaign and Advocacy Head"},
+                            {name: "Joshua Emil Sacalamitao", position: "Convener"},
+                            {name: "Mayor Estelita M. Aquino", position: "Adviser"}
                         ].map((member, index) => (
                             <div
                                 key={index}

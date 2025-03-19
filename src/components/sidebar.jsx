@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Menu, X } from "lucide-react"; // Lucide icons for menu & close
 import { useAuth } from "../context/AuthContext";
@@ -13,10 +13,14 @@ const Sidebar = ({ isOpen: externalIsOpen, setIsOpen: externalSetIsOpen }) => {
     
     const { user: authUser, isAuthenticated } = useAuth();
 
-    // Debug log
-    console.log('Sidebar - IsOpen:', isOpen);
-    console.log('Sidebar - Auth User:', authUser);
-    console.log('Sidebar - Is Authenticated:', isAuthenticated);
+    // Only log debug info on mount
+    useEffect(() => {
+        if (process.env.NODE_ENV === 'development') {
+            console.log('Sidebar - IsOpen:', isOpen);
+            console.log('Sidebar - Auth User:', authUser);
+            console.log('Sidebar - Is Authenticated:', isAuthenticated);
+        }
+    }, []); // Empty dependency array so it only runs once
 
     // Helper function for role check
     const hasRole = (role) => {

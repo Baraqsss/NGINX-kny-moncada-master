@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { FaDownload, FaSearch, FaFilter, FaSort, FaEye, FaCheck, FaTimes } from 'react-icons/fa';
+import { FaDownload, FaSearch, FaFilter, FaSort, FaEye, FaCheck, FaTimes, FaFileUpload, FaFileDownload, FaPlus, FaTrash } from 'react-icons/fa';
 import { donationsAPI } from '../../services/api';
 
 const DonationManagement = () => {
@@ -16,11 +16,30 @@ const DonationManagement = () => {
   const [totalAmount, setTotalAmount] = useState(0);
   const [showDonationDetails, setShowDonationDetails] = useState(false);
   const [currentDonation, setCurrentDonation] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [formData, setFormData] = useState({
+    donorName: '',
+    amount: '',
+    method: 'Cash',
+    status: 'Completed',
+    date: new Date().toISOString().split('T')[0],
+    referenceNumber: '',
+    notes: ''
+  });
+  const [filters, setFilters] = useState({
+    status: '',
+    method: '',
+    startDate: '',
+    endDate: '',
+    donorName: ''
+  });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
   // Fetch donations on component mount
   useEffect(() => {
     fetchDonations();
-  }, []);
+  }, [currentPage, filters]);
 
   // Calculate total amount whenever donations change
   useEffect(() => {
@@ -235,197 +254,391 @@ const DonationManagement = () => {
     }
   };
 
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      // Use the donationsAPI service instead of direct fetch
+      console.log('Creating donation with data:', formData);
+      const response = await donationsAPI.createDonation(formData);
+      console.log('Donation created:', response);
+
+      if (response.data && response.data.donation) {
+        setDonations([response.data.donation, ...donations]);
+      } else if (response.donation) {
+        setDonations([response.donation, ...donations]);
+      }
+      
+      setShowForm(false);
+      setFormData({
+        donorName: '',
+        amount: '',
+        method: 'Cash',
+        status: 'Completed',
+        date: new Date().toISOString().split('T')[0],
+        referenceNumber: '',
+        notes: ''
+      });
+      
+      setError('Donation added successfully!');
+      setTimeout(() => setError(''), 3000);
+      fetchDonations();
+    } catch (err) {
+      console.error('Error creating donation:', err);
+      setError(err.message || 'Failed to create donation');
+    }
+  };
+
+  const handleImport = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setIsLoading(true);
+    try {
+      console.log('Importing donations from file:', file.name);
+      const response = await donationsAPI.importDonations(file);
+      console.log('Import response:', response);
+      
+      setError(`Successfully imported ${response.count || 'multiple'} donations`);
+      setTimeout(() => setError(''), 3000);
+      fetchDonations();
+    } catch (err) {
+      console.error('Error importing donations:', err);
+      setError(err.message || 'Failed to import donations');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      console.log('Exporting donations with filters:', filters);
+      // The donationsAPI.exportDonations method handles opening the download url
+      donationsAPI.exportDonations(filters);
+    } catch (err) {
+      console.error('Error exporting donations:', err);
+      setError(err.message || 'Failed to export donations');
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this donation?')) return;
+
+    setIsLoading(true);
+    try {
+      console.log('Deleting donation with ID:', id);
+      await donationsAPI.deleteDonation(id);
+      
+      setDonations(donations.filter(d => (d._id || d.id) !== id));
+      setError('Donation deleted successfully');
+      setTimeout(() => setError(''), 3000);
+    } catch (err) {
+      console.error('Error deleting donation:', err);
+      setError(err.message || 'Failed to delete donation');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="container mx-auto p-4">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Donation Management</h1>
-        <button
-          onClick={() => {/* Export functionality would go here */}}
-          className="flex items-center bg-violet-700 text-white px-4 py-2 rounded-lg hover:bg-violet-800 transition-colors"
-        >
-          <FaDownload className="mr-2" /> Export Data
-        </button>
+        <div className="flex space-x-2">
+          <label className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 cursor-pointer">
+            <FaFileUpload className="inline mr-2" />
+            Import CSV
+            <input
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={handleImport}
+            />
+          </label>
+          <button
+            onClick={handleExport}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+          >
+            <FaFileDownload className="inline mr-2" />
+            Export CSV
+          </button>
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="bg-violet-600 text-white px-4 py-2 rounded-lg hover:bg-violet-700"
+          >
+            <FaPlus className="inline mr-2" />
+            Add Donation
+          </button>
+        </div>
       </div>
 
+      {/* Success and Error Messages */}
       {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+        <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
           {error}
         </div>
       )}
 
-      <div className="bg-white rounded-lg shadow-md p-4 mb-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 space-y-2 md:space-y-0">
-          <div className="flex items-center">
-            <div className="relative">
-              <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+      {/* Donation Form */}
+      {showForm && (
+        <div className="mb-6 bg-white p-6 rounded-lg shadow">
+          <h2 className="text-xl font-semibold mb-4">Add New Donation</h2>
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-700 text-sm font-bold mb-2">
+                Donor Name <span className="text-red-500">*</span>
+              </label>
               <input
                 type="text"
-                placeholder="Search donations..."
-                value={searchTerm}
-                onChange={handleSearch}
-                className="pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-violet-500 focus:border-violet-500 bg-[#9985be] text-black"
+                value={formData.donorName}
+                onChange={(e) => setFormData({ ...formData, donorName: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg text-white bg-[#9985be] focus:outline-none focus:border-violet-500"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 text-sm font-bold mb-2">
+                Amount <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                value={formData.amount}
+                onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg text-white bg-[#9985be] focus:outline-none focus:border-violet-500"
+                required
+                min="0"
+                step="0.01"
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 text-sm font-bold mb-2">
+                Method <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={formData.method}
+                onChange={(e) => setFormData({ ...formData, method: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg text-white bg-[#9985be] focus:outline-none focus:border-violet-500"
+                required
+              >
+                <option value="Cash">Cash</option>
+                <option value="G-Cash">G-Cash</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-gray-700 text-sm font-bold mb-2">
+                Status <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={formData.status}
+                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg text-white bg-[#9985be] focus:outline-none focus:border-violet-500"
+                required
+              >
+                <option value="Completed">Completed</option>
+                <option value="Refunded">Refunded</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-gray-700 text-sm font-bold mb-2">
+                Date <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="date"
+                value={formData.date}
+                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg text-white bg-[#9985be] focus:outline-none focus:border-violet-500"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 text-sm font-bold mb-2">
+                Reference Number
+              </label>
+              <input
+                type="text"
+                value={formData.referenceNumber}
+                onChange={(e) => setFormData({ ...formData, referenceNumber: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg text-white bg-[#9985be] focus:outline-none focus:border-violet-500"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-gray-700 text-sm font-bold mb-2">
+                Notes
+              </label>
+              <textarea
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg text-white bg-[#9985be] focus:outline-none focus:border-violet-500"
+                rows="3"
+              />
+            </div>
+            <div className="md:col-span-2 flex justify-end space-x-2">
+              <button
+                type="button"
+                onClick={() => setShowForm(false)}
+                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700"
+              >
+                Save Donation
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Filters */}
+      <div className="mb-6 bg-white p-4 rounded-lg shadow">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div>
+            <label className="block text-gray-700 text-sm font-bold mb-2">
+              Status
+            </label>
+            <select
+              value={filters.status}
+              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+              className="w-full px-3 py-2 border rounded-lg text-white bg-[#9985be] focus:outline-none focus:border-violet-500"
+            >
+              <option value="">All</option>
+              <option value="Completed">Completed</option>
+              <option value="Refunded">Refunded</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-gray-700 text-sm font-bold mb-2">
+              Method
+            </label>
+            <select
+              value={filters.method}
+              onChange={(e) => setFilters({ ...filters, method: e.target.value })}
+              className="w-full px-3 py-2 border rounded-lg text-white bg-[#9985be] focus:outline-none focus:border-violet-500"
+            >
+              <option value="">All</option>
+              <option value="Cash">Cash</option>
+              <option value="G-Cash">G-Cash</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-gray-700 text-sm font-bold mb-2">
+              Date Range
+            </label>
+            <div className="flex space-x-2">
+              <input
+                type="date"
+                value={filters.startDate}
+                onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg text-white bg-[#9985be] focus:outline-none focus:border-violet-500"
+              />
+              <input
+                type="date"
+                value={filters.endDate}
+                onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
+                className="w-full px-3 py-2 border rounded-lg text-white bg-[#9985be] focus:outline-none focus:border-violet-500"
               />
             </div>
           </div>
-          
-          <div className="flex flex-wrap gap-2">
-            <div className="flex items-center">
-              <FaFilter className="mr-2 text-gray-500" />
-              <select
-                value={dateFilter}
-                onChange={handleDateFilterChange}
-                className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-violet-500 focus:border-violet-500 bg-[#9985be] text-white"
-              >
-                <option value="all">All Time</option>
-                <option value="today">Today</option>
-                <option value="week">This Week</option>
-                <option value="month">This Month</option>
-              </select>
-            </div>
-            
-            <div className="flex items-center ml-2">
-              <select
-                value={statusFilter}
-                onChange={handleStatusFilterChange}
-                className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-violet-500 focus:border-violet-500 bg-[#9985be] text-white"
-              >
-                <option value="all">All Status</option>
-                <option value="pending">Pending</option>
-                <option value="completed">Completed</option>
-                <option value="failed">Failed</option>
-                <option value="refunded">Refunded</option>
-              </select>
-            </div>
+          <div>
+            <label className="block text-gray-700 text-sm font-bold mb-2">
+              Donor Name
+            </label>
+            <input
+              type="text"
+              value={filters.donorName}
+              onChange={(e) => setFilters({ ...filters, donorName: e.target.value })}
+              className="w-full px-3 py-2 border rounded-lg text-white bg-[#9985be] focus:outline-none focus:border-violet-500"
+              placeholder="Search by donor name"
+            />
           </div>
         </div>
-        
-        <div className="bg-violet-100 p-3 rounded-md mb-4">
-          <p className="text-violet-800 font-semibold">
-            Total Donations: {formatCurrency(totalAmount)} ({filteredDonations.length} transactions)
-          </p>
-        </div>
-        
-        {isLoading ? (
-          <div className="text-center py-4">Loading donations...</div>
-        ) : (
-          <div className="overflow-x-auto">
-            {filteredDonations.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">No donations found matching your criteria.</div>
-            ) : (
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th 
-                      scope="col" 
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                      onClick={() => handleSortChange('date')}
-                    >
-                      <div className="flex items-center">
-                        Date
-                        {sortBy === 'date' && (
-                          <FaSort className="ml-1" />
-                        )}
-                      </div>
-                    </th>
-                    <th 
-                      scope="col" 
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                      onClick={() => handleSortChange('donor')}
-                    >
-                      <div className="flex items-center">
-                        Donor
-                        {sortBy === 'donor' && (
-                          <FaSort className="ml-1" />
-                        )}
-                      </div>
-                    </th>
-                    <th 
-                      scope="col" 
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                      onClick={() => handleSortChange('amount')}
-                    >
-                      <div className="flex items-center">
-                        Amount
-                        {sortBy === 'amount' && (
-                          <FaSort className="ml-1" />
-                        )}
-                      </div>
-                    </th>
-                    <th 
-                      scope="col" 
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
-                      onClick={() => handleSortChange('status')}
-                    >
-                      <div className="flex items-center">
-                        Status
-                        {sortBy === 'status' && (
-                          <FaSort className="ml-1" />
-                        )}
-                      </div>
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredDonations.map((donation) => (
-                    <tr key={donation._id || donation.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {formatDate(donation.createdAt)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">
-                          {donation.donor?.name || 'Anonymous'}
-                        </div>
-                        {donation.donor?.email && (
-                          <div className="text-sm text-gray-500">
-                            {donation.donor.email}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatCurrency(donation.amount, donation.currency)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(donation.status)}`}>
-                          {donation.status || 'pending'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button
-                          onClick={() => viewDonationDetails(donation)}
-                          className="text-violet-600 hover:text-violet-900 mr-3"
-                          title="View Details"
-                        >
-                          <FaEye />
-                        </button>
-                        {donation.status === 'pending' && (
-                          <>
-                            <button
-                              onClick={() => updateDonationStatus(donation._id || donation.id, 'completed')}
-                              className="text-green-600 hover:text-green-900 mr-3"
-                              title="Mark as Completed"
-                            >
-                              <FaCheck />
-                            </button>
-                            <button
-                              onClick={() => updateDonationStatus(donation._id || donation.id, 'failed')}
-                              className="text-red-600 hover:text-red-900"
-                              title="Mark as Failed"
-                            >
-                              <FaTimes />
-                            </button>
-                          </>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        )}
+      </div>
+
+      {/* Donations Table */}
+      <div className="bg-white rounded-lg shadow overflow-x-auto">
+        <table className="min-w-full">
+          <thead>
+            <tr className="bg-gray-50">
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Donor Name
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Amount
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Method
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Status
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Date
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Reference
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {donations.map((donation) => (
+              <tr key={donation._id}>
+                <td className="px-6 py-4 whitespace-nowrap">{donation.donorName}</td>
+                <td className="px-6 py-4 whitespace-nowrap">₱{donation.amount.toFixed(2)}</td>
+                <td className="px-6 py-4 whitespace-nowrap">{donation.method}</td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span
+                    className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                      donation.status === 'Completed'
+                        ? 'bg-green-100 text-green-800'
+                        : 'bg-red-100 text-red-800'
+                    }`}
+                  >
+                    {donation.status}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  {new Date(donation.date).toLocaleDateString()}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">{donation.referenceNumber || '-'}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  <button
+                    onClick={() => handleDelete(donation._id)}
+                    className="text-red-600 hover:text-red-900"
+                  >
+                    <FaTrash />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Pagination */}
+      <div className="mt-4 flex justify-center">
+        <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+          <button
+            onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+            disabled={currentPage === 1}
+            className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+          >
+            Previous
+          </button>
+          <span className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
+            Page {currentPage} of {totalPages}
+          </span>
+          <button
+            onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+            disabled={currentPage === totalPages}
+            className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+          >
+            Next
+          </button>
+        </nav>
       </div>
 
       {/* Donation Details Modal */}

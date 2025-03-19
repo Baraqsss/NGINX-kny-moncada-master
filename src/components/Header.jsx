@@ -31,12 +31,14 @@ const Header = () => {
         return authUser.role.toLowerCase() === role.toLowerCase();
     };
 
+    // Only run once on component mount to log the initial user data
     useEffect(() => {
-        // Show user data on initialization
-        console.log('Current user data:', authUser);
-        console.log('Is member?', hasRole('member'));
-        console.log('Is approved?', authUser?.isApproved);
-    }, [authUser]);
+        if (authUser) {
+            console.log('Current user data:', authUser);
+            console.log('Is member?', hasRole('member'));
+            console.log('Is approved?', authUser?.isApproved);
+        }
+    }, []); // Empty dependency array so it only runs once
 
     return (
         <div className="navbar shadow-sm bg-opacity-90 backdrop-blur-sm backdrop-filter backdrop-saturate-150" style={{ backgroundColor: "#6955A4" }}> {/* Custom color for the header */}

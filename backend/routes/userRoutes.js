@@ -1,5 +1,5 @@
 import express from 'express';
-import { registerUser, loginUser, getCurrentUser, getAllUsers, approveUser, rejectUser, updateUserRole, deleteUser } from '../controllers/userController.js';
+import { registerUser, loginUser, getCurrentUser, getAllUsers, approveUser, rejectUser, updateUserRole, deleteUser, updateProfile } from '../controllers/userController.js';
 import { protect, restrictTo } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -10,6 +10,7 @@ router.post('/login', loginUser);
 
 // Protected routes
 router.get('/me', protect, getCurrentUser);
+router.put('/profile', protect, updateProfile);
 
 // Admin routes - protected and restricted to admin users
 router.get('/', protect, restrictTo('Admin'), getAllUsers);

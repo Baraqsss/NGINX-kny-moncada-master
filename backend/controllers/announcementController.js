@@ -3,7 +3,9 @@ import Announcement from '../models/announcementModel.js';
 // Get all announcements
 export const getAllAnnouncements = async (req, res) => {
   try {
-    const announcements = await Announcement.find().sort({ createdAt: -1 });
+    const announcements = await Announcement.find()
+      .sort({ createdAt: -1 })
+      .populate('createdBy', 'name');
     
     res.status(200).json({
       status: 'success',
@@ -47,13 +49,33 @@ export const getAnnouncement = async (req, res) => {
   }
 };
 
-// Create new announcement (admin only)
+// Create new announcement
 export const createAnnouncement = async (req, res) => {
   try {
-    const newAnnouncement = await Announcement.create({
-      ...req.body,
+    console.log('Creating announcement with data:', req.body);
+    console.log('File in request:', req.file);
+    
+    // Ensure required fields are present
+    if (!req.body.title || !req.body.content) {
+      return res.status(400).json({
+        status: 'fail',
+        message: 'Title and content are required fields'
+      });
+    }
+    
+    const announcementData = {
+      title: req.body.title,
+      content: req.body.content,
       createdBy: req.user.id
-    });
+    };
+
+    // If an image was uploaded, add its URL to the announcement data
+    if (req.file) {
+      announcementData.image = `/uploads/${req.file.filename}`;
+    }
+
+    console.log('Final announcement data to save:', announcementData);
+    const newAnnouncement = await Announcement.create(announcementData);
     
     res.status(201).json({
       status: 'success',
@@ -62,6 +84,7 @@ export const createAnnouncement = async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('Error creating announcement:', error);
     res.status(400).json({
       status: 'fail',
       message: error.message
@@ -69,12 +92,24 @@ export const createAnnouncement = async (req, res) => {
   }
 };
 
-// Update announcement (admin only)
+// Update announcement
 export const updateAnnouncement = async (req, res) => {
   try {
+    console.log('Updating announcement with data:', req.body);
+    console.log('File in update request:', req.file);
+    
+    const updateData = { ...req.body };
+
+    // If a new image was uploaded, update the image URL
+    if (req.file) {
+      updateData.image = `/uploads/${req.file.filename}`;
+      console.log('New image path:', updateData.image);
+    }
+
+    console.log('Final update data:', updateData);
     const announcement = await Announcement.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      updateData,
       {
         new: true,
         runValidators: true
@@ -95,6 +130,7 @@ export const updateAnnouncement = async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('Error updating announcement:', error);
     res.status(400).json({
       status: 'fail',
       message: error.message

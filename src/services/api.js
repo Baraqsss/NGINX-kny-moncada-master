@@ -11,6 +11,7 @@ import {
   getDonationEndpoints,
   getAdminEndpoints
 } from '../config/apiConfig';
+import axios from 'axios';
 
 // Store the API URL - will be updated if needed
 let apiUrl = API_BASE_URL;
@@ -69,9 +70,13 @@ async function fetchAPI(endpoint, options = {}) {
   
   // Default headers
   const headers = {
-    'Content-Type': 'application/json',
     ...options.headers,
   };
+
+  // Only set Content-Type if not FormData
+  if (!(options.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   // Add auth token if available
   const token = localStorage.getItem('token');
@@ -195,7 +200,7 @@ export const authAPI = {
     });
   },
   
-  getCurrentUser: () => {
+  getCurrentUser: async () => {
     // For mock data in development
     if (shouldUseMockData()) {
       const isAdmin = localStorage.getItem('isAdmin') === 'true';
@@ -220,7 +225,10 @@ export const authAPI = {
       }
     }
     
-    return fetchAPI('/users/me');
+    const response = await fetchAPI('/users/me');
+    // The backend returns { status: 'success', data: { user: {...} } }
+    // We need to return just the user object
+    return response.data.user;
   },
   
   logout: () => {
@@ -288,15 +296,51 @@ export const eventsAPI = {
   
   getEvent: (id) => fetchAPI(`/events/${id}`),
   
-  createEvent: (eventData) => fetchAPI('/events', {
-    method: 'POST',
-    body: JSON.stringify(eventData),
-  }),
+  createEvent: (eventData) => {
+    // If eventData is FormData, don't stringify it
+    const isFormData = eventData instanceof FormData;
+    return fetchAPI('/events', {
+      method: 'POST',
+      body: isFormData ? eventData : JSON.stringify(eventData),
+      headers: isFormData ? {} : { 'Content-Type': 'application/json' }
+    });
+  },
   
-  updateEvent: (id, eventData) => fetchAPI(`/events/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(eventData),
-  }),
+  updateEvent: async (id, eventData) => {
+    try {
+      console.log(`Updating event with ID: ${id}`);
+      console.log('Update data:', eventData);
+      
+      if (!id) {
+        console.error('No event ID provided for update');
+        throw new Error('Event ID is required for update');
+      }
+      
+      // If eventData is FormData, don't stringify it
+      const isFormData = eventData instanceof FormData;
+      
+      // For form data updates that include files
+      if (isFormData) {
+        console.log('Sending event update as FormData');
+        return fetchAPI(`/events/${id}`, {
+          method: 'PATCH', // Use PATCH instead of PUT to allow partial updates
+          body: eventData,
+          // Don't set Content-Type for FormData, browser will set it with boundary
+        });
+      }
+      
+      // For regular JSON updates
+      console.log('Sending event update as JSON');
+      return fetchAPI(`/events/${id}`, {
+        method: 'PATCH', // Use PATCH instead of PUT
+        body: JSON.stringify(eventData),
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error(`Error updating event ${id}:`, error);
+      throw error;
+    }
+  },
   
   deleteEvent: (id) => fetchAPI(`/events/${id}`, {
     method: 'DELETE',
@@ -305,35 +349,217 @@ export const eventsAPI = {
 
 // Announcements API calls
 export const announcementsAPI = {
-  getAllAnnouncements: () => fetchAPI('/announcements'),
+  getAllAnnouncements: async () => {
+    try {
+      // Use mock data in development if needed
+      if (shouldUseMockData()) {
+        console.log('Using mock data for announcements');
+        return Promise.resolve({
+          status: 'success',
+          data: {
+            announcements: [
+              {
+                _id: '1',
+                title: 'Welcome to our community!',
+                content: 'We\'re excited to have you join our organization. Stay tuned for upcoming events and volunteer opportunities.',
+                createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
+                createdBy: { name: 'Admin' },
+                priority: 'high'
+              },
+              {
+                _id: '2',
+                title: 'Monthly Meeting Scheduled',
+                content: 'Our next monthly meeting will be held on the 15th. Please make sure to attend as we\'ll be discussing important topics.',
+                createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString(),
+                createdBy: { name: 'Admin' },
+                priority: 'medium'
+              }
+            ]
+          }
+        });
+      }
+      
+      // Make actual API request
+      const response = await fetchAPI('/announcements');
+      console.log('Announcements API response:', response);
+      return response;
+    } catch (error) {
+      console.error('Error in getAllAnnouncements:', error);
+      throw error;
+    }
+  },
   
-  getAnnouncement: (id) => fetchAPI(`/announcements/${id}`),
+  getAnnouncement: async (id) => {
+    try {
+      const response = await fetchAPI(`/announcements/${id}`);
+      return response;
+    } catch (error) {
+      console.error(`Error getting announcement ${id}:`, error);
+      throw error;
+    }
+  },
   
-  createAnnouncement: (announcementData) => fetchAPI('/announcements', {
-    method: 'POST',
-    body: JSON.stringify(announcementData),
-  }),
+  createAnnouncement: async (announcementData) => {
+    try {
+      console.log('Creating announcement with data type:', 
+        announcementData instanceof FormData ? 'FormData' : 'JSON object');
+      
+      // If announcementData contains an image file, use FormData
+      if (announcementData.image instanceof File) {
+        console.log('Creating FormData for announcement with image');
+        const formData = new FormData();
+        
+        // Add all text fields to FormData
+        Object.keys(announcementData).forEach(key => {
+          if (key !== 'image' || !(announcementData[key] instanceof File)) {
+            console.log(`Adding to FormData - ${key}:`, announcementData[key]);
+            formData.append(key, announcementData[key]);
+          }
+        });
+        
+        // Add image file if it exists
+        if (announcementData.image) {
+          console.log('Adding image to FormData:', announcementData.image.name);
+          formData.append('image', announcementData.image);
+        }
+        
+        console.log('FormData entries:', [...formData.entries()].map(e => `${e[0]}: ${e[1] instanceof File ? e[1].name : e[1]}`));
+        
+        return fetchAPI('/announcements', {
+          method: 'POST',
+          body: formData,
+          // Don't set Content-Type, browser will set it with boundary parameter
+        });
+      }
+      
+      // If announcementData is already FormData, use it directly
+      if (announcementData instanceof FormData) {
+        console.log('Using provided FormData for announcement');
+        console.log('FormData entries:', [...announcementData.entries()].map(e => `${e[0]}: ${e[1] instanceof File ? e[1].name : e[1]}`));
+        
+        return fetchAPI('/announcements', {
+          method: 'POST',
+          body: announcementData,
+          // Don't set Content-Type, browser will set it with boundary parameter
+        });
+      }
+      
+      // Otherwise just send JSON
+      console.log('Sending announcement as JSON:', announcementData);
+      return fetchAPI('/announcements', {
+        method: 'POST',
+        body: JSON.stringify(announcementData),
+      });
+    } catch (error) {
+      console.error('Error creating announcement:', error);
+      throw error;
+    }
+  },
   
-  updateAnnouncement: (id, announcementData) => fetchAPI(`/announcements/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(announcementData),
-  }),
+  updateAnnouncement: async (id, announcementData) => {
+    try {
+      // Handle FormData if we have a file
+      if (announcementData.image instanceof File) {
+        const formData = new FormData();
+        
+        // Add all text fields to FormData
+        Object.keys(announcementData).forEach(key => {
+          if (key !== 'image' || !(announcementData[key] instanceof File)) {
+            formData.append(key, announcementData[key]);
+          }
+        });
+        
+        // Add image file if it exists
+        if (announcementData.image) {
+          formData.append('image', announcementData.image);
+        }
+        
+        return fetchAPI(`/announcements/${id}`, {
+          method: 'PATCH', // Use PATCH instead of PUT to support partial updates
+          body: formData,
+          // Don't set Content-Type, browser will set it with boundary parameter
+        });
+      }
+      
+      // Otherwise just send JSON
+      return fetchAPI(`/announcements/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(announcementData),
+      });
+    } catch (error) {
+      console.error(`Error updating announcement ${id}:`, error);
+      throw error;
+    }
+  },
   
-  deleteAnnouncement: (id) => fetchAPI(`/announcements/${id}`, {
-    method: 'DELETE',
-  }),
+  deleteAnnouncement: async (id) => {
+    try {
+      return fetchAPI(`/announcements/${id}`, {
+        method: 'DELETE',
+      });
+    } catch (error) {
+      console.error(`Error deleting announcement ${id}:`, error);
+      throw error;
+    }
+  },
 };
 
 // Donations API calls
+const API_URL = 'http://localhost:5000/api';
+
+// Create axios instance with default config
+const api = axios.create({
+  baseURL: API_URL,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
+
+// Add token to requests if available
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
 export const donationsAPI = {
-  getAllDonations: () => fetchAPI('/donations'),
-  
-  getDonation: (id) => fetchAPI(`/donations/${id}`),
-  
-  createDonation: (donationData) => fetchAPI('/donations', {
-    method: 'POST',
-    body: JSON.stringify(donationData),
-  }),
+  getAllDonations: async (params) => {
+    const response = await api.get('/donations', { params });
+    return response.data;
+  },
+
+  createDonation: async (donationData) => {
+    const response = await api.post('/donations', donationData);
+    return response.data;
+  },
+
+  deleteDonation: async (id) => {
+    const response = await api.delete(`/donations/${id}`);
+    return response.data;
+  },
+
+  importDonations: async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post('/donations/import', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    return response.data;
+  },
+
+  exportDonations: (filters) => {
+    const queryString = new URLSearchParams(filters).toString();
+    window.location.href = `${API_URL}/donations/export?${queryString}`;
+  }
 };
 
 // Admin API calls
@@ -356,10 +582,41 @@ export const adminAPI = {
   }),
 };
 
+// Email API calls
+export const emailAPI = {
+  // Send confirmation email
+  sendConfirmationEmail: async (emailData) => {
+    const { to, subject, html, text } = emailData;
+    
+    // For mock data in development
+    if (shouldUseMockData()) {
+      console.log('MOCK: Sending confirmation email to:', to);
+      console.log('MOCK: Email subject:', subject);
+      // Return a successful mock response
+      return Promise.resolve({
+        success: true,
+        message: 'Confirmation email sent successfully (mock)'
+      });
+    }
+    
+    // Make the actual API call
+    return fetchAPI('/send-email', {
+      method: 'POST',
+      body: JSON.stringify({
+        to,
+        subject,
+        html,
+        text
+      }),
+    });
+  }
+};
+
 export default {
   auth: authAPI,
   events: eventsAPI,
   announcements: announcementsAPI,
   donations: donationsAPI,
   admin: adminAPI,
+  email: emailAPI,
 }; 

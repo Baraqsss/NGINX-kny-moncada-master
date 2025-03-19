@@ -21,6 +21,37 @@ export const getDashboardStats = async (req, res) => {
     const donations = await Donation.find();
     const totalDonationAmount = donations.reduce((sum, donation) => sum + donation.amount, 0);
     
+    // Get donation statistics
+    const donationStats = await Donation.aggregate([
+      {
+        $match: { status: 'Completed' }
+      },
+      {
+        $group: {
+          _id: null,
+          totalAmount: { $sum: '$amount' },
+          totalCount: { $sum: 1 },
+          averageAmount: { $avg: '$amount' }
+        }
+      }
+    ]);
+
+    // Get recent donations
+    const recentDonations = await Donation.find()
+      .sort({ date: -1 })
+      .limit(5);
+
+    // Get method distribution
+    const methodDistribution = await Donation.aggregate([
+      {
+        $group: {
+          _id: '$method',
+          count: { $sum: 1 },
+          total: { $sum: '$amount' }
+        }
+      }
+    ]);
+
     // Return stats
     res.status(200).json({
       totalUsers,
@@ -28,7 +59,14 @@ export const getDashboardStats = async (req, res) => {
       totalEvents,
       totalAnnouncements,
       totalDonations,
-      totalDonationAmount
+      totalDonationAmount,
+      stats: donationStats[0] || {
+        totalAmount: 0,
+        totalCount: 0,
+        averageAmount: 0
+      },
+      recentDonations,
+      methodDistribution
     });
   } catch (error) {
     console.error('Error getting dashboard stats:', error);

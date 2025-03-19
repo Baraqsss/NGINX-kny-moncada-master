@@ -1,53 +1,53 @@
 import mongoose from 'mongoose';
 
 const donationSchema = new mongoose.Schema({
+  donorName: {
+    type: String,
+    required: [true, 'Donor name is required']
+  },
   amount: {
     type: Number,
-    required: [true, 'A donation must have an amount'],
-    min: [1, 'Donation amount must be at least 1']
+    required: [true, 'Amount is required'],
+    min: [0, 'Amount cannot be negative']
   },
-  currency: {
+  method: {
     type: String,
-    default: 'PHP',
-    enum: ['PHP', 'USD', 'EUR', 'GBP']
+    required: [true, 'Payment method is required'],
+    enum: ['Cash', 'G-Cash']
   },
-  donor: {
-    name: {
-      type: String,
-      required: [true, 'A donor must have a name']
-    },
-    email: String,
-    phone: String,
-    userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
-    },
-    anonymous: {
-      type: Boolean,
-      default: false
-    }
-  },
-  paymentMethod: {
-    type: String,
-    required: [true, 'A donation must have a payment method'],
-    enum: ['bank_transfer', 'credit_card', 'paypal', 'gcash', 'other']
-  },
-  transactionId: String,
   status: {
     type: String,
-    enum: ['pending', 'completed', 'failed', 'refunded'],
-    default: 'pending'
+    required: [true, 'Status is required'],
+    enum: ['Completed', 'Refunded'],
+    default: 'Completed'
   },
-  purpose: {
-    type: String,
-    default: 'general'
-  },
-  message: String,
-  createdAt: {
+  date: {
     type: Date,
+    required: [true, 'Date is required'],
     default: Date.now
+  },
+  referenceNumber: {
+    type: String,
+    sparse: true
+  },
+  notes: {
+    type: String
+  },
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: [true, 'Created by user is required']
   }
+}, {
+  timestamps: true
 });
+
+// Indexes for better query performance
+donationSchema.index({ donorName: 1 });
+donationSchema.index({ date: 1 });
+donationSchema.index({ status: 1 });
+donationSchema.index({ method: 1 });
+donationSchema.index({ referenceNumber: 1 }, { sparse: true });
 
 const Donation = mongoose.model('Donation', donationSchema);
 

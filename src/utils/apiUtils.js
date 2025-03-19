@@ -92,36 +92,7 @@ export const getMockData = (url) => {
   
   // Mock data for announcements
   if (url.includes('/announcements')) {
-    return [
-      { 
-        id: '1', 
-        title: 'New Website Launch', 
-        message: 'We are excited to announce our new website!', 
-        createdAt: '2023-12-01', 
-        attachment: null 
-      },
-      { 
-        id: '2', 
-        title: 'Holiday Schedule', 
-        message: 'Our office will be closed during the holidays from December 24th to January 2nd. For urgent matters, please contact our emergency line at 555-123-4567.', 
-        createdAt: '2023-12-05',
-        attachment: null 
-      },
-      { 
-        id: '3', 
-        title: 'New Board Members', 
-        message: 'We welcome our new board members for the upcoming year: Jane Smith, John Doe, and Maria Garcia. They bring a wealth of experience in community development and nonprofit management.', 
-        createdAt: '2023-12-10',
-        attachment: null 
-      },
-      { 
-        id: '4', 
-        title: 'Annual Report Available', 
-        message: 'Our annual report is now available for download. It includes our financial statements, program outcomes, and plans for the upcoming year.', 
-        createdAt: '2023-12-15', 
-        attachment: 'annual-report.pdf' 
-      }
-    ];
+    return mockAnnouncementsData;
   }
   
   // Mock data for donations
@@ -245,145 +216,166 @@ export const apiRequest = async (url, options = {}) => {
     headers.Authorization = `Bearer ${token}`;
   }
   
+  // If FormData, remove Content-Type to let browser set it with boundary
+  if (options.body instanceof FormData) {
+    delete headers['Content-Type'];
+  }
+  
   // Merge options with headers
   const requestOptions = {
     ...options,
-    headers,
+    headers
   };
   
   try {
+    console.log(`[API Request] ${options.method || 'GET'} ${url}`);
+    
+    // Set up a timeout for the request (10 seconds)
+    const controller = new AbortController();
+    const signal = controller.signal;
+    
+    // Set timeout that properly aborts the fetch
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, 10000);
+    
+    // Add signal to request options
+    requestOptions.signal = signal;
+    
+    // Make the request
     const response = await fetch(url, requestOptions);
     
-    // Handle non-2xx responses
+    // Clear the timeout
+    clearTimeout(timeoutId);
+    
+    // Handle the response
     if (!response.ok) {
       // Try to parse error message from response
-      let errorData;
       try {
-        errorData = await response.json();
-      } catch (e) {
-        // If response is not JSON, use status text
-        throw new Error(response.statusText || 'An error occurred');
+        const errorData = await response.json();
+        console.error(`[API Error] ${response.status} ${response.statusText}:`, errorData);
+        
+        // Create an error with the message from the API
+        const error = new Error(errorData.message || `API Error: ${response.statusText}`);
+        error.response = { status: response.status, data: errorData };
+        throw error;
+      } catch (jsonError) {
+        // If parsing JSON fails, create a generic error
+        console.error(`[API Error] ${response.status} ${response.statusText} (failed to parse error)`);
+        const error = new Error(`API Error: ${response.status} ${response.statusText}`);
+        error.response = { status: response.status };
+        throw error;
       }
-      
-      // Throw error with message from API if available
-      throw new Error(
-        errorData.message || 
-        errorData.error || 
-        'An error occurred'
-      );
     }
     
-    // Check if response is empty
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      return await response.json();
+    // Check if the response is empty
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      const data = await response.json();
+      console.log(`[API Response] ${url}:`, data);
+      return data;
+    } else {
+      console.log(`[API Response] ${url}: Non-JSON response`);
+      // For non-JSON responses, return the response object
+      return { success: true, status: response.status };
     }
-    
-    return await response.text();
   } catch (error) {
-    console.error('API request failed:', error);
+    if (error.name === 'AbortError') {
+      console.error(`[API Timeout] Request to ${url} timed out after 10 seconds`);
+      throw new Error(`Request timed out. Please check your connection and try again.`);
+    }
+    
+    if (!error.response) {
+      console.error(`[API Network Error] ${url}:`, error);
+      if (error.message.includes('Failed to fetch') || 
+          error.message.includes('Network request failed') || 
+          error.message.includes('ETIMEDOUT') ||
+          error.message.includes('Network Error')) {
+        throw new Error(`Cannot connect to the server. Please check your connection and try again.`);
+      }
+      error.message = `Network error: ${error.message}`;
+    }
     throw error;
   }
 };
 
 /**
- * Make a GET request
- * @param {string} url - The API endpoint URL
+ * Perform a GET request
+ * @param {string} url - The endpoint URL
  * @param {Object} options - Additional options
  * @returns {Promise} - The fetch promise
  */
 export const get = (url, options = {}) => {
   return apiRequest(url, {
     method: 'GET',
-    ...options,
+    ...options
   });
 };
 
 /**
- * Make a POST request
- * @param {string} url - The API endpoint URL
+ * Perform a POST request
+ * @param {string} url - The endpoint URL
  * @param {Object} data - The data to send
  * @param {Object} options - Additional options
  * @returns {Promise} - The fetch promise
  */
-export const post = (url, data, options = {}) => {
-  // For mock data in development, handle special cases
-  if (shouldUseMockData()) {
-    // Handle login
-    if (url.includes('/users/login')) {
-      if (data.username === 'admin' && data.password === 'admin123') {
-        return Promise.resolve({
-          token: 'mock-admin-token',
-          user: {
-            id: 'admin1',
-            name: 'Admin User',
-            username: 'admin',
-            email: 'admin@example.com',
-            role: 'Admin',
-            isApproved: true
-          }
-        });
-      } else {
-        return Promise.resolve({
-          token: 'mock-user-token',
-          user: {
-            id: '1',
-            name: 'Test User',
-            username: data.username,
-            email: `${data.username}@example.com`,
-            role: 'Member',
-            isApproved: true
-          }
-        });
-      }
-    }
-    
-    // Handle registration
-    if (url.includes('/users/register')) {
-      return Promise.resolve({
-        token: 'mock-user-token',
-        user: {
-          id: Date.now().toString(),
-          ...data,
-          role: 'Member',
-          isApproved: false
-        }
-      });
-    }
-  }
+export const post = (url, data = {}, options = {}) => {
+  // Handle FormData separately
+  const body = data instanceof FormData ? data : JSON.stringify(data);
   
   return apiRequest(url, {
     method: 'POST',
-    body: JSON.stringify(data),
-    ...options,
+    body,
+    ...options
   });
 };
 
 /**
- * Make a PUT request
- * @param {string} url - The API endpoint URL
+ * Perform a PUT request
+ * @param {string} url - The endpoint URL
  * @param {Object} data - The data to send
  * @param {Object} options - Additional options
  * @returns {Promise} - The fetch promise
  */
-export const put = (url, data, options = {}) => {
+export const put = (url, data = {}, options = {}) => {
+  // Handle FormData separately
+  const body = data instanceof FormData ? data : JSON.stringify(data);
+  
   return apiRequest(url, {
     method: 'PUT',
-    body: JSON.stringify(data),
-    ...options,
+    body,
+    ...options
   });
 };
 
 /**
- * Make a DELETE request
- * @param {string} url - The API endpoint URL
+ * Perform a PATCH request
+ * @param {string} url - The endpoint URL
+ * @param {Object} data - The data to send
+ * @param {Object} options - Additional options
+ * @returns {Promise} - The fetch promise
+ */
+export const patch = (url, data = {}, options = {}) => {
+  // Handle FormData separately
+  const body = data instanceof FormData ? data : JSON.stringify(data);
+  
+  return apiRequest(url, {
+    method: 'PATCH',
+    body,
+    ...options
+  });
+};
+
+/**
+ * Perform a DELETE request
+ * @param {string} url - The endpoint URL
  * @param {Object} options - Additional options
  * @returns {Promise} - The fetch promise
  */
 export const del = (url, options = {}) => {
   return apiRequest(url, {
     method: 'DELETE',
-    ...options,
+    ...options
   });
 };
 
@@ -435,4 +427,37 @@ export const updateFile = (url, formData, options = {}) => {
     headers,
     ...options,
   });
+};
+
+// Add mock announcements data for development
+export const mockAnnouncementsData = {
+  status: 'success',
+  data: {
+    announcements: [
+      {
+        _id: '1',
+        title: 'Welcome to our community!',
+        content: 'We\'re excited to have you join our organization. Stay tuned for upcoming events and volunteer opportunities.',
+        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
+        createdBy: { name: 'Admin' },
+        priority: 'high'
+      },
+      {
+        _id: '2',
+        title: 'Monthly Meeting Scheduled',
+        content: 'Our next monthly meeting will be held on the 15th. Please make sure to attend as we\'ll be discussing important topics.',
+        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString(),
+        createdBy: { name: 'Admin' },
+        priority: 'medium'
+      },
+      {
+        _id: '3',
+        title: 'Fundraising Campaign Update',
+        content: 'We\'ve reached 75% of our fundraising goal! Thank you to everyone who has contributed so far. We still need your support to reach our target.',
+        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 14).toISOString(), 
+        createdBy: { name: 'Fundraising Committee' },
+        priority: 'medium'
+      }
+    ]
+  }
 }; 

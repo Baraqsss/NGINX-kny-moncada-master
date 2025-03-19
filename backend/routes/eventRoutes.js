@@ -1,6 +1,7 @@
 import express from 'express';
 import * as eventController from '../controllers/eventController.js';
 import { protect, restrictTo, isApproved } from '../middleware/authMiddleware.js';
+import upload from '../middleware/uploadMiddleware.js';
 
 const router = express.Router();
 
@@ -8,19 +9,23 @@ const router = express.Router();
 router.get('/', eventController.getAllEvents);
 router.get('/:id', eventController.getEvent);
 
-// Protected routes
+// Protected routes (require authentication)
 router.use(protect);
+
+// Interest routes (any authenticated user)
+router.post('/:id/interest', eventController.showInterestInEvent);
+router.get('/interested', eventController.getInterestedEvents);
 
 // Member routes (requires approval)
 router.use(isApproved);
 router.post('/:id/register', eventController.registerForEvent);
-router.post('/:id/interest', eventController.showInterestInEvent);
+router.delete('/:id/unregister', eventController.unregisterFromEvent);
 
 // Admin only routes
 router.use(restrictTo('admin'));
-router.post('/', eventController.createEvent);
+router.post('/', upload.single('image'), eventController.createEvent);
 router.route('/:id')
-  .patch(eventController.updateEvent)
+  .patch(upload.single('image'), eventController.updateEvent)
   .delete(eventController.deleteEvent);
 
 export default router; 

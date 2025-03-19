@@ -379,35 +379,92 @@ export const loginUser = async (req, res) => {
 // @access  Private
 export const getCurrentUser = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
+    const user = await User.findById(req.user._id).select('-password');
     
     if (!user) {
       return res.status(404).json({
-        success: false,
+        status: 'fail',
         message: 'User not found'
       });
     }
 
     res.status(200).json({
-      success: true,
-      user: {
-        id: user._id,
-        name: user.name,
-        username: user.username,
-        email: user.email,
-        age: user.age,
-        birthday: user.birthday,
-        memberOrg: user.memberOrg,
-        organization: user.organization,
-        committee: user.committee,
-        role: user.role
+      status: 'success',
+      data: {
+        user
       }
     });
   } catch (error) {
-    console.error('Get current user error:', error);
     res.status(500).json({
-      success: false,
-      message: error.message || 'Server error while fetching user data'
+      status: 'fail',
+      message: error.message
+    });
+  }
+};
+
+// Update current user profile
+export const updateProfile = async (req, res) => {
+  try {
+    const allowedFields = [
+      'name',
+      'email',
+      'phone',
+      'birthday',
+      'organization',
+      'committee',
+      'address'
+    ];
+
+    // Filter out unwanted fields
+    const filteredBody = {};
+    Object.keys(req.body).forEach(key => {
+      if (allowedFields.includes(key)) {
+        filteredBody[key] = req.body[key];
+      }
+    });
+
+    // Handle address fields separately
+    if (req.body.address) {
+      filteredBody.address = {
+        street: req.body.address.street || '',
+        city: req.body.address.city || '',
+        state: req.body.address.state || '',
+        zipCode: req.body.address.zipCode || '',
+        country: req.body.address.country || ''
+      };
+    }
+
+    // Handle profile picture if uploaded
+    if (req.file) {
+      filteredBody.profilePicture = req.file.path;
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user._id,
+      filteredBody,
+      {
+        new: true,
+        runValidators: true
+      }
+    ).select('-password');
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        status: 'fail',
+        message: 'User not found'
+      });
+    }
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        user: updatedUser
+      }
+    });
+  } catch (error) {
+    res.status(400).json({
+      status: 'fail',
+      message: error.message
     });
   }
 }; 
