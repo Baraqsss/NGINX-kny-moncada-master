@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
-import logo from "../assets/logo.png";
+import logo from "../assets/logo2.png";
 import user from "../assets/user.png";
 import Sidebar from "../components/sidebar";
 import { useAuth } from "../context/AuthContext";
@@ -16,21 +16,22 @@ const Header = () => {
     };
 
     return (
-        <div className="navbar h-200 shadow-sm bg-opacity-90 backdrop-blur-sm backdrop-filter backdrop-saturate-150" style={{ backgroundColor: "#6955A4" }}> {/* Custom color for the header */}
+        <div className="navbar shadow-sm bg-opacity-90 backdrop-blur-sm backdrop-filter backdrop-saturate-150" style={{ backgroundColor: "#6955A4" }}> {/* Custom color for the header */}
             {/* Sidebar Component */}
-            <div className="fixed top-8 left-4 z-50">
+            <div className="fixed top-4 left-4 z-50">
                 <Sidebar />
             </div>
 
             {/* Left: Logo */}
-            <div className="navbar-start ml-16">
-                <Link to="/" className="btn btn-ghost hover:bg-violet-700 hover:bg-opacity-90 hover:shadow-lg">
+            <div className="navbar-start ml-20">
+                <Link to="/" >
                     {/* Logo image with increased size */}
-                    <img src={logo} alt="Logo" className="w-32 h-32" /> {/* Increased size */}
+                    <img src={logo} alt="Logo" className="h-12 p-0 hover:shadow-lg" /> {/* Increased size */}
                 </Link>
             </div>
+{/*
 
-            {/* Center: Navigation for larger screens */}
+             Center: Navigation for larger screens
             <div className="navbar-center hidden lg:flex">
                 <ul className="menu menu-horizontal text-white text-lg">
                     <li>
@@ -47,6 +48,7 @@ const Header = () => {
                     </li>
                 </ul>
             </div>
+*/}
 
             {/* Right: Profile dropdown or Login/Signup buttons */}
             <div className="navbar-end mr-4">
