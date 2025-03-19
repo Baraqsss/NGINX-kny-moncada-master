@@ -32,5 +32,8 @@ export default defineConfig([
         { allowConstantExport: true },
       ],
     },
+  "env": {
+    "node": true
+  }
   },
 ]);

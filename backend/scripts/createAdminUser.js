@@ -7,7 +7,7 @@ import User from '../models/userModel.js';
 dotenv.config();
 
 // Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI)
+mongoose.connect('mongodb://127.0.0.1:27017/kny-moncada', { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log('MongoDB Connected'.cyan.underline))
   .catch(err => {
     console.error(`Error: ${err.message}`.red.bold);
@@ -18,12 +18,12 @@ const createAdminUser = async () => {
   try {
     // Check if admin user already exists
     const adminExists = await User.findOne({ email: 'admin@example.com' });
-    
+
     if (adminExists) {
       console.log('Admin user already exists'.yellow);
       process.exit(0);
     }
-    
+
     // Admin user data
     const adminUser = {
       name: 'Admin proxy',
@@ -42,16 +42,16 @@ const createAdminUser = async () => {
         country: 'Admin Country'
       }
     };
-    
+
     // Create admin user
     const user = await User.create(adminUser);
-    
+
     console.log(`Admin user created: ${user.name}`.green.inverse);
     console.log(`Email: ${user.email}`.cyan);
     console.log(`Username: ${user.username}`.cyan);
     console.log(`Password: admin123`.cyan);
     console.log(`Role: ${user.role}`.cyan);
-    
+
     process.exit(0);
   } catch (error) {
     console.error(`Error: ${error.message}`.red.bold);
@@ -59,4 +59,4 @@ const createAdminUser = async () => {
   }
 };
 
-createAdminUser(); 
+createAdminUser();

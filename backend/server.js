@@ -22,7 +22,11 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI)
+mongoose.connect(process.env.MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  serverSelectionTimeoutMS: 30000 // Increase timeout to 30 seconds
+})
   .then(() => console.log('MongoDB connected successfully'))
   .catch((err) => {
     console.error('MongoDB connection error:', err);
@@ -43,8 +47,8 @@ app.get('/', (req, res) => {
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'ok', 
+  res.status(200).json({
+    status: 'ok',
     message: 'API is running',
     timestamp: new Date().toISOString(),
     version: '1.0.0'
@@ -69,5 +73,7 @@ const startServer = (port) => {
   }
 };
 
+
+console.log('MONGODB_URI:', process.env.MONGODB_URI);
 // Start server
-startServer(PORT); 
+startServer(PORT);
