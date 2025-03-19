@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { FaUser, FaEnvelope, FaPhone, FaCalendarAlt, FaBuilding, FaEdit, FaSave, FaTimes } from 'react-icons/fa';
+import { shouldUseMockData } from '../utils/apiUtils';
 
 // Use a data URL for the default profile image instead of importing from assets
 const defaultProfilePic = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23cccccc'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z'/%3E%3C/svg%3E";
 
 const Profile = () => {
-  const { user } = useAuth();
+  const { user: authUser, token, updateUserData } = useAuth();
   const [userDetails, setUserDetails] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -16,43 +17,94 @@ const Profile = () => {
   const [imagePreview, setImagePreview] = useState(null);
 
   useEffect(() => {
+    // Initialize with auth user data immediately to avoid empty state
+    if (authUser) {
+      console.log('Initializing profile with auth user data:', authUser);
+      setUserDetails(authUser);
+      initializeFormData(authUser);
+    }
+    
+    // Then fetch complete profile details
     fetchUserDetails();
-  }, [user]);
+  }, [authUser]);
+
+  const initializeFormData = (userData) => {
+    setFormData({
+      name: userData?.name || '',
+      email: userData?.email || '',
+      phone: userData?.phone || '',
+      birthday: userData?.birthday ? new Date(userData.birthday).toISOString().split('T')[0] : '',
+      organization: userData?.organization || '',
+      committee: userData?.committee || '',
+      address: {
+        street: userData?.address?.street || '',
+        city: userData?.address?.city || '',
+        state: userData?.address?.state || '',
+        zipCode: userData?.address?.zipCode || '',
+        country: userData?.address?.country || ''
+      }
+    });
+  };
 
   const fetchUserDetails = async () => {
+    if (!authUser) {
+      console.log('No authenticated user, skipping profile fetch');
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     try {
-      // Replace with your actual API call
-      const response = await fetch('http://localhost:5000/api/users/me', {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      console.log('Fetching detailed user profile...');
+      // Use mock or real API based on environment
+      let userData;
       
-      if (!response.ok) {
-        throw new Error('Failed to fetch user details');
+      if (shouldUseMockData()) {
+        // If using mock data, enhance the auth user with additional details
+        userData = {
+          ...authUser,
+          phone: authUser.phone || '555-123-4567',
+          birthday: authUser.birthday || '1990-01-01',
+          organization: authUser.organization || 'Kaya Natin Youth',
+          committee: authUser.committee || 'Programs and Events',
+          address: authUser.address || {
+            street: '123 Main St',
+            city: 'Moncada',
+            state: 'Tarlac',
+            zipCode: '2400',
+            country: 'Philippines'
+          },
+          age: authUser.age || '33',
+          createdAt: authUser.createdAt || '2023-01-15'
+        };
+        console.log('Using enhanced mock data for profile:', userData);
+      } else {
+        // Make actual API call
+        const response = await fetch('http://localhost:5000/api/users/me', {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch user details');
+        }
+        
+        userData = await response.json();
+        console.log('Received user profile data from API:', userData);
       }
       
-      const data = await response.json();
-      setUserDetails(data);
-      setFormData({
-        name: data.name || '',
-        email: data.email || '',
-        phone: data.phone || '',
-        birthday: data.birthday ? new Date(data.birthday).toISOString().split('T')[0] : '',
-        organization: data.organization || '',
-        committee: data.committee || '',
-        address: {
-          street: data.address?.street || '',
-          city: data.address?.city || '',
-          state: data.address?.state || '',
-          zipCode: data.address?.zipCode || '',
-          country: data.address?.country || ''
-        }
-      });
+      setUserDetails(userData);
+      initializeFormData(userData);
     } catch (err) {
+      console.error('Error fetching profile:', err);
       setError(err.message || 'Failed to fetch user details');
-      console.error(err);
+      
+      // If we failed to get detailed profile but have basic auth user, still use that
+      if (authUser && !userDetails) {
+        setUserDetails(authUser);
+        initializeFormData(authUser);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -93,45 +145,71 @@ const Profile = () => {
     setError('');
 
     try {
-      const formDataToSend = new FormData();
-      
-      // Append user data
-      Object.keys(formData).forEach(key => {
-        if (key === 'address') {
-          Object.keys(formData.address).forEach(addressKey => {
-            formDataToSend.append(`address[${addressKey}]`, formData.address[addressKey]);
-          });
-        } else {
-          formDataToSend.append(key, formData[key]);
+      console.log('Submitting profile update:', formData);
+      let updatedUser;
+
+      if (shouldUseMockData()) {
+        // For mock data, just simulate a successful update
+        updatedUser = {
+          ...userDetails,
+          ...formData,
+          profilePicture: imagePreview || userDetails?.profilePicture,
+          // Keep nested address object intact
+          address: formData.address
+        };
+        
+        // Simulate API delay
+        await new Promise(resolve => setTimeout(resolve, 800));
+        console.log('Mock profile update successful:', updatedUser);
+      } else {
+        // For real API
+        const formDataToSend = new FormData();
+        
+        // Append user data
+        Object.keys(formData).forEach(key => {
+          if (key === 'address') {
+            Object.keys(formData.address).forEach(addressKey => {
+              formDataToSend.append(`address[${addressKey}]`, formData.address[addressKey]);
+            });
+          } else {
+            formDataToSend.append(key, formData[key]);
+          }
+        });
+        
+        // Append profile image if changed
+        if (profileImage) {
+          formDataToSend.append('profilePicture', profileImage);
         }
-      });
-      
-      // Append profile image if changed
-      if (profileImage) {
-        formDataToSend.append('profilePicture', profileImage);
+
+        // Make the API call
+        const response = await fetch('http://localhost:5000/api/users/profile', {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${token}`
+          },
+          body: formDataToSend
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to update profile');
+        }
+
+        updatedUser = await response.json();
+        console.log('Profile updated successfully:', updatedUser);
       }
 
-      // Replace with your actual API call
-      const response = await fetch('http://localhost:5000/api/users/profile', {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`
-        },
-        body: formDataToSend
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update profile');
-      }
-
-      const updatedUser = await response.json();
+      // Update local state with new user data
       setUserDetails(updatedUser);
+      
+      // Update user data in the auth context to keep it in sync
+      updateUserData(updatedUser);
+      
       setIsEditing(false);
       setProfileImage(null);
       setImagePreview(null);
     } catch (err) {
+      console.error('Profile update error:', err);
       setError(err.message || 'Failed to update profile');
-      console.error(err);
     } finally {
       setIsLoading(false);
     }
@@ -147,6 +225,7 @@ const Profile = () => {
     });
   };
 
+  // Display loading state only on initial load
   if (isLoading && !userDetails) {
     return (
       <div className="container mx-auto p-4 flex justify-center items-center h-screen">
@@ -158,6 +237,7 @@ const Profile = () => {
     );
   }
 
+  // If no user details and there's an error
   if (error && !userDetails) {
     return (
       <div className="container mx-auto p-4">
@@ -170,6 +250,15 @@ const Profile = () => {
         >
           Try Again
         </button>
+      </div>
+    );
+  }
+
+  // If no user details and no error, show a message
+  if (!userDetails) {
+    return (
+      <div className="container mx-auto p-4 text-center">
+        <p className="text-gray-600">No user profile available. Please log in again.</p>
       </div>
     );
   }
@@ -380,7 +469,7 @@ const Profile = () => {
                   onClick={() => {
                     setIsEditing(false);
                     setImagePreview(null);
-                    fetchUserDetails(); // Reset form data
+                    initializeFormData(userDetails); // Reset form data to current user details
                   }}
                   className="flex items-center px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
                   disabled={isLoading}

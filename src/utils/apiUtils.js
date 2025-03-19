@@ -7,7 +7,49 @@
  * @returns {boolean} - Whether to use mock data
  */
 export const shouldUseMockData = () => {
-  return false; // Set to false to use real backend API
+  // This could be set based on environment variables or a global config
+  return process.env.NODE_ENV === 'development' && !isBackendAvailable();
+};
+
+// Simple cache to avoid checking backend availability too frequently
+let backendAvailabilityCache = {
+  isAvailable: null,
+  lastChecked: null
+};
+
+/**
+ * Check if backend is available
+ * @returns {boolean} - Whether the backend is available
+ */
+const isBackendAvailable = async () => {
+  // If we've checked in the last 30 seconds, use cached result
+  const now = Date.now();
+  if (backendAvailabilityCache.lastChecked && 
+      now - backendAvailabilityCache.lastChecked < 30000) {
+    return backendAvailabilityCache.isAvailable;
+  }
+  
+  try {
+    const response = await fetch('http://localhost:5000/api/health', {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      // Short timeout to avoid hanging
+      signal: AbortSignal.timeout(2000)
+    });
+    
+    backendAvailabilityCache = {
+      isAvailable: response.ok,
+      lastChecked: now
+    };
+    
+    return response.ok;
+  } catch (error) {
+    backendAvailabilityCache = {
+      isAvailable: false,
+      lastChecked: now
+    };
+    return false;
+  }
 };
 
 /**
@@ -103,18 +145,68 @@ export const getMockData = (url) => {
         username: 'admin',
         email: 'admin@example.com',
         role: 'Admin',
-        isApproved: true
+        isApproved: true,
+        phone: '555-123-4567',
+        birthday: '1985-05-15',
+        organization: 'Kaya Natin Youth',
+        committee: 'Executive Board',
+        age: 38,
+        createdAt: '2022-01-01',
+        address: {
+          street: '123 Admin Blvd',
+          city: 'Moncada',
+          state: 'Tarlac',
+          zipCode: '2400',
+          country: 'Philippines'
+        },
+        profilePicture: "https://ui-avatars.com/api/?name=Admin+User&background=6955A4&color=fff&size=200"
       };
     } else {
+      // Get username from local storage if available
+      const storedUser = localStorage.getItem('user');
+      let username = 'testuser';
+      let name = 'Test User';
+      
+      if (storedUser) {
+        try {
+          const parsed = JSON.parse(storedUser);
+          username = parsed.username || username;
+          name = parsed.name || name;
+        } catch (e) {
+          console.error('Error parsing stored user when creating mock profile:', e);
+        }
+      }
+      
       return {
         id: '1',
-        name: 'Test User',
-        username: 'testuser',
-        email: 'test@example.com',
+        name: name,
+        username: username,
+        email: `${username}@example.com`,
         role: 'Member',
-        isApproved: true
+        isApproved: true,
+        phone: '555-987-6543',
+        birthday: '1995-08-23',
+        organization: 'Kaya Natin Youth',
+        committee: 'Programs and Events',
+        age: 28,
+        createdAt: '2023-03-15',
+        address: {
+          street: '456 Member St',
+          city: 'Moncada',
+          state: 'Tarlac',
+          zipCode: '2400',
+          country: 'Philippines'
+        },
+        profilePicture: `https://ui-avatars.com/api/?name=${name.replace(/ /g, '+')}&background=6955A4&color=fff&size=200`
       };
     }
+  }
+  
+  // Mock data for user profile update
+  if (url.includes('/users/profile') && url.includes('PUT')) {
+    // Return the request body as the response
+    // This would need to be handled in the actual API call logic
+    return { success: true, message: 'Profile updated successfully' };
   }
   
   // No mock data for this endpoint

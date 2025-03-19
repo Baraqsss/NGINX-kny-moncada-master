@@ -1,18 +1,48 @@
 // API service for making requests to the backend
 import { shouldUseMockData, getMockData } from '../utils/apiUtils';
-import { API_BASE_URL, findBackendPort } from '../config/apiConfig';
+import { 
+  API_BASE_URL, 
+  findBackendPort, 
+  getApiUrl,
+  getAuthEndpoints,
+  getUserEndpoints,
+  getEventEndpoints,
+  getAnnouncementEndpoints,
+  getDonationEndpoints,
+  getAdminEndpoints
+} from '../config/apiConfig';
 
 // Store the API URL - will be updated if needed
-let apiUrl = 'http://localhost:50001/api'; // Updated to use port 50001
+let apiUrl = API_BASE_URL;
+let currentEndpoints = {
+  auth: getAuthEndpoints(API_BASE_URL),
+  user: getUserEndpoints(API_BASE_URL),
+  event: getEventEndpoints(API_BASE_URL),
+  announcement: getAnnouncementEndpoints(API_BASE_URL),
+  donation: getDonationEndpoints(API_BASE_URL),
+  admin: getAdminEndpoints(API_BASE_URL)
+};
 
 // Initialize API URL
 const initializeApiUrl = async () => {
   try {
     // Try to find the correct port
     const port = await findBackendPort();
-    if (port !== 5000) {
-      apiUrl = `http://localhost:${port}/api`;
+    const newApiUrl = getApiUrl(port);
+    
+    if (newApiUrl !== apiUrl) {
+      apiUrl = newApiUrl;
       console.log(`Backend detected on port ${port}, using ${apiUrl}`);
+      
+      // Update all endpoints with the new base URL
+      currentEndpoints = {
+        auth: getAuthEndpoints(apiUrl),
+        user: getUserEndpoints(apiUrl),
+        event: getEventEndpoints(apiUrl),
+        announcement: getAnnouncementEndpoints(apiUrl),
+        donation: getDonationEndpoints(apiUrl),
+        admin: getAdminEndpoints(apiUrl)
+      };
     }
   } catch (error) {
     console.error('Error initializing API URL:', error);
@@ -24,13 +54,13 @@ initializeApiUrl();
 
 // Helper function for making API requests
 async function fetchAPI(endpoint, options = {}) {
-  const url = `${apiUrl}${endpoint}`;
+  const fullUrl = endpoint.startsWith('http') ? endpoint : `${apiUrl}${endpoint}`;
   
   // Check if we should use mock data
   if (shouldUseMockData()) {
-    const mockData = getMockData(url);
+    const mockData = getMockData(fullUrl);
     if (mockData) {
-      console.log(`Using mock data for ${url}`, mockData);
+      console.log(`Using mock data for ${fullUrl}`, mockData);
       // Simulate network delay
       await new Promise(resolve => setTimeout(resolve, 500));
       return mockData;
@@ -55,8 +85,18 @@ async function fetchAPI(endpoint, options = {}) {
   };
 
   try {
-    console.log(`Making API request to: ${url}`);
-    const response = await fetch(url, config);
+    console.log(`Making API request to: ${fullUrl}`);
+    
+    // Add timeout to prevent hanging requests
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    
+    const response = await fetch(fullUrl, {
+      ...config,
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
     
     // Handle non-JSON responses
     const contentType = response.headers.get('content-type');
@@ -78,6 +118,12 @@ async function fetchAPI(endpoint, options = {}) {
       return await response.text();
     }
   } catch (error) {
+    // Check if it's a timeout error
+    if (error.name === 'AbortError') {
+      console.error('Request timeout: The server took too long to respond');
+      throw new Error('Request timeout: The server took too long to respond');
+    }
+    
     // Check if it's a network error (likely backend not running)
     if (error.message === 'Failed to fetch' || error.name === 'TypeError') {
       console.error('Network error: Backend server may not be running');
