@@ -130,6 +130,3 @@ A Postman collection is included in the root directory (`KNY-Moncada-API.postman
 ### Admin
 - `GET /api/admin/stats` - Get dashboard statistics (admin only)
 
-## License
-
-This project is licensed under the MIT License.
