@@ -29,8 +29,6 @@ const DonationManagement = () => {
   const [filters, setFilters] = useState({
     status: '',
     method: '',
-    startDate: '',
-    endDate: '',
     donorName: ''
   });
   const [currentPage, setCurrentPage] = useState(1);
@@ -172,75 +170,18 @@ const DonationManagement = () => {
     }
   };
 
-  // Filter and sort donations
+  // Filter donations
   const filteredDonations = donations.filter(donation => {
-    // Search term filter
-    const searchLower = searchTerm.toLowerCase();
-    const donorName = donation.donor?.name || '';
-    const donorEmail = donation.donor?.email || '';
-    const purpose = donation.purpose || '';
-    const message = donation.message || '';
+    const matchesDonorName = !filters.donorName || 
+      donation.donorName.toLowerCase().includes(filters.donorName.toLowerCase());
     
-    const matchesSearch = 
-      searchTerm === '' || 
-      donorName.toLowerCase().includes(searchLower) ||
-      donorEmail.toLowerCase().includes(searchLower) ||
-      purpose.toLowerCase().includes(searchLower) ||
-      message.toLowerCase().includes(searchLower);
+    const matchesStatus = !filters.status || 
+      donation.status === filters.status;
     
-    // Date filter
-    let matchesDate = true;
-    if (dateFilter !== 'all') {
-      const donationDate = new Date(donation.createdAt);
-      const now = new Date();
-      
-      switch (dateFilter) {
-        case 'today':
-          matchesDate = donationDate.toDateString() === now.toDateString();
-          break;
-        case 'week':
-          const weekAgo = new Date(now);
-          weekAgo.setDate(now.getDate() - 7);
-          matchesDate = donationDate >= weekAgo;
-          break;
-        case 'month':
-          const monthAgo = new Date(now);
-          monthAgo.setMonth(now.getMonth() - 1);
-          matchesDate = donationDate >= monthAgo;
-          break;
-        default:
-          matchesDate = true;
-      }
-    }
+    const matchesMethod = !filters.method || 
+      donation.method === filters.method;
     
-    // Status filter
-    let matchesStatus = true;
-    if (statusFilter !== 'all') {
-      matchesStatus = donation.status === statusFilter;
-    }
-    
-    return matchesSearch && matchesDate && matchesStatus;
-  }).sort((a, b) => {
-    // Sort by selected field
-    let comparison = 0;
-    
-    switch (sortBy) {
-      case 'amount':
-        comparison = parseFloat(a.amount) - parseFloat(b.amount);
-        break;
-      case 'donor':
-        comparison = (a.donor?.name || '').localeCompare(b.donor?.name || '');
-        break;
-      case 'status':
-        comparison = (a.status || '').localeCompare(b.status || '');
-        break;
-      case 'date':
-      default:
-        comparison = new Date(a.createdAt) - new Date(b.createdAt);
-    }
-    
-    // Apply sort order
-    return sortOrder === 'asc' ? comparison : -comparison;
+    return matchesDonorName && matchesStatus && matchesMethod;
   });
 
   // Get status badge color
@@ -309,14 +250,62 @@ const DonationManagement = () => {
     }
   };
 
-  const handleExport = async () => {
+  const handleExport = () => {
     try {
-      console.log('Exporting donations with filters:', filters);
-      // The donationsAPI.exportDonations method handles opening the download url
-      donationsAPI.exportDonations(filters);
+      // Get the filtered donations
+      const dataToExport = filteredDonations.map(donation => ({
+        'Donor Name': donation.donorName,
+        'Amount': `₱${donation.amount.toFixed(2)}`,
+        'Method': donation.method,
+        'Status': donation.status,
+        'Date': new Date(donation.date).toLocaleDateString(),
+        'Reference Number': donation.referenceNumber || '-',
+        'Notes': donation.notes || '-'
+      }));
+
+      // Add total amount row
+      const totalRow = {
+        'Donor Name': 'TOTAL',
+        'Amount': `₱${totalAmount.toFixed(2)}`,
+        'Method': '',
+        'Status': '',
+        'Date': '',
+        'Reference Number': '',
+        'Notes': ''
+      };
+      dataToExport.push(totalRow);
+
+      // Convert to CSV
+      const headers = Object.keys(dataToExport[0]);
+      const csvContent = [
+        headers.join(','),
+        ...dataToExport.map(row => 
+          headers.map(header => {
+            const cell = row[header] || '';
+            // Escape commas and quotes in the cell value
+            return `"${String(cell).replace(/"/g, '""')}"`;
+          }).join(',')
+        )
+      ].join('\n');
+
+      // Create and trigger download
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      
+      link.setAttribute('href', url);
+      link.setAttribute('download', `donations_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      setError('Donations exported successfully!');
+      setTimeout(() => setError(''), 3000);
     } catch (err) {
       console.error('Error exporting donations:', err);
-      setError(err.message || 'Failed to export donations');
+      setError('Failed to export donations');
     }
   };
 
@@ -492,7 +481,19 @@ const DonationManagement = () => {
 
       {/* Filters */}
       <div className="mb-6 bg-white p-4 rounded-lg shadow">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-gray-700 text-sm font-bold mb-2">
+              Donor Name
+            </label>
+            <input
+              type="text"
+              value={filters.donorName}
+              onChange={(e) => setFilters({ ...filters, donorName: e.target.value })}
+              className="w-full px-3 py-2 border rounded-lg text-white bg-[#9985be] focus:outline-none focus:border-violet-500"
+              placeholder="Search by donor name"
+            />
+          </div>
           <div>
             <label className="block text-gray-700 text-sm font-bold mb-2">
               Status
@@ -520,37 +521,6 @@ const DonationManagement = () => {
               <option value="Cash">Cash</option>
               <option value="G-Cash">G-Cash</option>
             </select>
-          </div>
-          <div>
-            <label className="block text-gray-700 text-sm font-bold mb-2">
-              Date Range
-            </label>
-            <div className="flex space-x-2">
-              <input
-                type="date"
-                value={filters.startDate}
-                onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg text-white bg-[#9985be] focus:outline-none focus:border-violet-500"
-              />
-              <input
-                type="date"
-                value={filters.endDate}
-                onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
-                className="w-full px-3 py-2 border rounded-lg text-white bg-[#9985be] focus:outline-none focus:border-violet-500"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-gray-700 text-sm font-bold mb-2">
-              Donor Name
-            </label>
-            <input
-              type="text"
-              value={filters.donorName}
-              onChange={(e) => setFilters({ ...filters, donorName: e.target.value })}
-              className="w-full px-3 py-2 border rounded-lg text-white bg-[#9985be] focus:outline-none focus:border-violet-500"
-              placeholder="Search by donor name"
-            />
           </div>
         </div>
       </div>
@@ -584,7 +554,7 @@ const DonationManagement = () => {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {donations.map((donation) => (
+            {filteredDonations.map((donation) => (
               <tr key={donation._id}>
                 <td className="px-6 py-4 whitespace-nowrap">{donation.donorName}</td>
                 <td className="px-6 py-4 whitespace-nowrap">₱{donation.amount.toFixed(2)}</td>
