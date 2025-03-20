@@ -507,7 +507,27 @@ export const announcementsAPI = {
 };
 
 // Donations API calls
-const API_URL = 'http://localhost:5000/api';
+const determineApiUrl = () => {
+  // Check if we're in a browser environment
+  if (typeof window !== 'undefined') {
+    // Production environment or Vercel deployment
+    if (process.env.NODE_ENV === 'production') {
+      // Get the host from the current URL
+      const host = window.location.host;
+      // If it's a Vercel deployment
+      if (host.includes('vercel.app')) {
+        return `https://${host}/api`;
+      }
+      // Custom domain in production
+      return `https://${host}/api`;
+    }
+  }
+  
+  // Development fallback
+  return 'http://localhost:5000/api';
+};
+
+const API_URL = determineApiUrl();
 
 // Create axios instance with default config
 const api = axios.create({

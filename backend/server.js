@@ -22,17 +22,42 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-  serverSelectionTimeoutMS: 30000 // Increase timeout to 30 seconds
-})
-  .then(() => console.log('MongoDB connected successfully'))
-  .catch((err) => {
-    console.error('MongoDB connection error:', err);
-    console.log('Starting server without MongoDB connection. Some features may not work.');
-  });
+// Optimize MongoDB connection for serverless
+let cached = global.mongoose;
+
+if (!cached) {
+  cached = global.mongoose = { conn: null, promise: null };
+}
+
+async function connectDB() {
+  if (cached.conn) {
+    return cached.conn;
+  }
+
+  if (!cached.promise) {
+    const opts = {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+      serverSelectionTimeoutMS: 30000 // 30 seconds timeout
+    };
+
+    cached.promise = mongoose.connect(process.env.MONGODB_URI, opts)
+      .then(mongoose => {
+        console.log('MongoDB connected successfully');
+        return mongoose;
+      })
+      .catch(err => {
+        console.error('MongoDB connection error:', err);
+        console.log('Starting server without MongoDB connection. Some features may not work.');
+        throw err;
+      });
+  }
+  cached.conn = await cached.promise;
+  return cached.conn;
+}
+
+// Connect to database (but don't wait)
+connectDB().catch(console.error);
 
 // Routes
 app.use('/api/users', userRoutes);
@@ -57,24 +82,12 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Function to start server with port fallback
-const startServer = (port) => {
-  try {
-    app.listen(port, () => {
-      console.log(`Server running on port ${port}`);
-    }).on('error', (err) => {
-      if (err.code === 'EADDRINUSE') {
-        console.log(`Port ${port} is busy, trying port ${port + 1}`);
-        startServer(port + 1);
-      } else {
-        console.error('Server error:', err);
-      }
-    });
-  } catch (error) {
-    console.error('Failed to start server:', error);
-  }
-};
+// Only start the server if not being imported (for Vercel)
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
 
-console.log('MONGODB_URI:', process.env.MONGODB_URI);
-// Start server
-startServer(PORT);
+// Export app for Vercel
+export default app;

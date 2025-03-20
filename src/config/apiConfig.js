@@ -1,5 +1,25 @@
-// API base URL - adjust port if needed
-const API_BASE_URL = 'http://localhost:5000/api';
+// API base URL - dynamically determine based on environment
+const determineApiBaseUrl = () => {
+  // Check if we're in a browser environment
+  if (typeof window !== 'undefined') {
+    // Production environment or Vercel deployment
+    if (process.env.NODE_ENV === 'production') {
+      // Get the host from the current URL
+      const host = window.location.host;
+      // If it's a Vercel deployment
+      if (host.includes('vercel.app')) {
+        return `https://${host}/api`;
+      }
+      // Custom domain in production
+      return `https://${host}/api`;
+    }
+  }
+  
+  // Development fallback
+  return 'http://localhost:5000/api';
+};
+
+const API_BASE_URL = determineApiBaseUrl();
 
 // Possible backend ports to try (in order of preference)
 const POSSIBLE_PORTS = [5000, 50001, 3000, 8000, 8080];
