@@ -18,7 +18,11 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: '*', // Allow all origins for testing
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -31,6 +35,7 @@ if (!cached) {
 
 async function connectDB() {
   if (cached.conn) {
+    console.log('Using cached MongoDB connection');
     return cached.conn;
   }
 
@@ -38,7 +43,9 @@ async function connectDB() {
     const opts = {
       useNewUrlParser: true,
       useUnifiedTopology: true,
-      serverSelectionTimeoutMS: 30000 // 30 seconds timeout
+      serverSelectionTimeoutMS: 5000, // Reduced timeout to fail faster
+      socketTimeoutMS: 30000,
+      connectTimeoutMS: 10000
     };
 
     cached.promise = mongoose.connect(process.env.MONGODB_URI, opts)
@@ -48,16 +55,36 @@ async function connectDB() {
       })
       .catch(err => {
         console.error('MongoDB connection error:', err);
-        console.log('Starting server without MongoDB connection. Some features may not work.');
         throw err;
       });
   }
-  cached.conn = await cached.promise;
-  return cached.conn;
+
+  try {
+    cached.conn = await cached.promise;
+    return cached.conn;
+  } catch (e) {
+    cached.promise = null;
+    throw e;
+  }
 }
 
-// Connect to database (but don't wait)
-connectDB().catch(console.error);
+// Connect to database immediately to handle cold starts better
+connectDB().catch(err => {
+  console.error('Initial MongoDB connection failed:', err);
+});
+
+// Simple logging middleware to troubleshoot timeouts
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  const start = Date.now();
+  
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url} - ${res.statusCode} - ${duration}ms`);
+  });
+  
+  next();
+});
 
 // Routes
 app.use('/api/users', userRoutes);
@@ -72,7 +99,7 @@ app.get('/', (req, res) => {
   res.send('KNY Moncada Foundation API is running');
 });
 
-// Health check endpoint
+// Health check endpoint - avoid database operations for health checks
 app.get('/api/health', (req, res) => {
   res.status(200).json({
     status: 'ok',

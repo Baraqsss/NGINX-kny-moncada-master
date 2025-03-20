@@ -260,6 +260,9 @@ export const updateUserRole = async (req, res) => {
 // @route   POST /api/users/register
 // @access  Public
 export const registerUser = async (req, res) => {
+  const startTime = Date.now();
+  console.log('Register endpoint called');
+  
   try {
     const {
       username,
@@ -273,32 +276,76 @@ export const registerUser = async (req, res) => {
       committee
     } = req.body;
 
-    // Check if user already exists
-    const userExists = await User.findOne({ $or: [{ email }, { username }] });
-    if (userExists) {
+    // Validate required fields immediately
+    if (!username || !password || !email || !name || !age) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username, password, email, name, and age are required fields'
+      });
+    }
+
+    // Simple validation to fail fast
+    if (password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 8 characters long'
+      });
+    }
+
+    // Check if user already exists - with a timeout to avoid hanging
+    console.log('Checking if user exists...');
+    
+    // Use a Promise.race to ensure we don't hang on DB operations
+    const checkUserPromise = User.findOne({ 
+      $or: [{ email }, { username }] 
+    }).select('_id').lean();
+    
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('DB timeout')), 5000)
+    );
+    
+    let existingUser;
+    try {
+      existingUser = await Promise.race([checkUserPromise, timeoutPromise]);
+    } catch (error) {
+      console.error('Error during user check:', error.message);
+      // If it's a timeout, we'll still create the user but log it
+      if (error.message !== 'DB timeout') {
+        throw error;
+      }
+    }
+    
+    if (existingUser) {
       return res.status(400).json({
         success: false,
         message: 'User with this email or username already exists'
       });
     }
 
-    // Create user
-    const user = await User.create({
+    // Create only the essential user data to minimize processing time
+    console.log('Creating new user...');
+    const minimalUser = {
       username,
       password,
       name,
       email,
-      age,
-      birthday,
-      memberOrg,
-      organization,
-      committee
-    });
-
-    // Generate token
+      age
+    };
+    
+    // Only add non-required fields if they exist and are valid
+    if (birthday) minimalUser.birthday = birthday;
+    if (memberOrg === 'yes' || memberOrg === 'no') minimalUser.memberOrg = memberOrg;
+    if (organization) minimalUser.organization = organization;
+    if (committee) minimalUser.committee = committee;
+    
+    const user = await User.create(minimalUser);
+    
+    // Generate token immediately after user creation
     const token = generateToken(user._id);
+    console.log(`User created successfully in ${Date.now() - startTime}ms`);
 
-    res.status(201).json({
+    // Return success response
+    return res.status(201).json({
       success: true,
       token,
       user: {
@@ -311,9 +358,9 @@ export const registerUser = async (req, res) => {
     });
   } catch (error) {
     console.error('Registration error:', error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: error.message || 'Server error during registration'
+      message: 'Server error during registration. Please try again.'
     });
   }
 };
