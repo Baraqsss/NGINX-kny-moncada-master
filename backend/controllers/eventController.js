@@ -1,6 +1,5 @@
 import Event from '../models/eventModel.js';
 import User from '../models/userModel.js';
-import { catchAsync } from '../utils/catchAsync.js';
 
 // Get all events
 export const getAllEvents = async (req, res) => {
@@ -305,32 +304,4 @@ export const unregisterFromEvent = async (req, res) => {
       message: error.message
     });
   }
-};
-
-/**
- * Get all members who registered for a specific event
- * @route GET /api/events/:id/members
- * @access Private Admin
- */
-export const getEventMembers = catchAsync(async (req, res) => {
-  const eventId = req.params.id;
-
-  // Find the event and populate the registeredUsers field with user details
-  const event = await Event.findById(eventId).populate({
-    path: 'registeredUsers',
-    select: 'name email username role' // Select only needed fields
-  });
-
-  if (!event) {
-    return res.status(404).json({ 
-      status: 'error', 
-      message: 'Event not found' 
-    });
-  }
-
-  // Return the members list
-  res.status(200).json({
-    status: 'success',
-    members: event.registeredUsers || []
-  });
-}); 
+}; 

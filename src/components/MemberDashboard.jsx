@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { FaMapMarkerAlt, FaCalendarAlt, FaClock, FaUsers, FaHeart, FaSignOutAlt, FaUser } from 'react-icons/fa';
+import { FaMapMarkerAlt, FaCalendarAlt, FaClock, FaUsers, FaHeart, FaSignOutAlt } from 'react-icons/fa';
 import axios from 'axios';
 import { API_BASE_URL } from '../config/apiConfig';
 
@@ -34,10 +34,6 @@ const MemberDashboard = () => {
   const [joinedEvents, setJoinedEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [showMembersModal, setShowMembersModal] = useState(false);
-  const [currentEvent, setCurrentEvent] = useState(null);
-  const [eventMembers, setEventMembers] = useState([]);
-  const [loadingMembers, setLoadingMembers] = useState(false);
 
   const isAdmin = user?.role === 'Admin';
 
@@ -127,40 +123,6 @@ const MemberDashboard = () => {
       console.error('Error fetching announcements:', err);
       // Don't set error state here to allow dashboard to load partially
     }
-  };
-
-  const fetchEventMembers = async (eventId) => {
-    if (!isAdmin) return;
-    
-    setLoadingMembers(true);
-    try {
-      const response = await api.get(`/events/${eventId}/members`);
-      
-      let membersList = [];
-      if (response.data?.members) {
-        membersList = response.data.members;
-      } else if (Array.isArray(response.data)) {
-        membersList = response.data;
-      }
-      
-      setEventMembers(membersList);
-    } catch (err) {
-      console.error('Error fetching event members:', err);
-      setEventMembers([]);
-    } finally {
-      setLoadingMembers(false);
-    }
-  };
-
-  const openMembersModal = (event, e) => {
-    if (!isAdmin) return;
-    
-    // Prevent event bubbling
-    if (e) e.stopPropagation();
-    
-    setCurrentEvent(event);
-    setShowMembersModal(true);
-    fetchEventMembers(event._id || event.id);
   };
 
   useEffect(() => {
@@ -471,13 +433,9 @@ const MemberDashboard = () => {
                         )}
                       </>
                     ) : (
-                      <button
-                        onClick={(e) => openMembersModal(event, e)}
-                        className="flex items-center px-4 py-2 bg-violet-600 text-white rounded hover:bg-violet-700 transition-colors"
-                      >
-                        <FaUsers className="mr-2" />
-                        View Members
-                      </button>
+                      <div className="flex items-center px-4 py-2 bg-gray-100 text-gray-600 rounded">
+                        <span>Admin View Only</span>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -486,57 +444,6 @@ const MemberDashboard = () => {
           )}
         </div>
       </div>
-
-      {/* Members Modal */}
-      {showMembersModal && currentEvent && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-lg">
-            <h2 className="text-xl font-bold mb-4">
-              Members Registered for: {currentEvent.title}
-            </h2>
-            
-            {loadingMembers ? (
-              <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-violet-700 mx-auto"></div>
-                <p className="mt-2 text-gray-600">Loading members...</p>
-              </div>
-            ) : (
-              <div className="max-h-80 overflow-y-auto">
-                {eventMembers.length === 0 ? (
-                  <p className="text-center py-4 text-gray-500">No members have registered for this event yet.</p>
-                ) : (
-                  <ul className="divide-y divide-gray-200">
-                    {eventMembers.map((member) => (
-                      <li key={member._id || member.id} className="py-3">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0">
-                            <div className="w-10 h-10 rounded-full bg-violet-100 flex items-center justify-center text-violet-800">
-                              <FaUser />
-                            </div>
-                          </div>
-                          <div className="ml-4">
-                            <p className="text-sm font-medium text-gray-900">{member.name || member.username}</p>
-                            <p className="text-sm text-gray-500">{member.email}</p>
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-            
-            <div className="mt-6 flex justify-end">
-              <button
-                onClick={() => setShowMembersModal(false)}
-                className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

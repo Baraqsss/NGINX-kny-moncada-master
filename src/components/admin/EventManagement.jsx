@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { FaPlus, FaEdit, FaTrash, FaPaperclip, FaCalendarAlt, FaMapMarkerAlt, FaUsers, FaUser } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaPaperclip, FaCalendarAlt, FaMapMarkerAlt, FaUsers } from 'react-icons/fa';
 import { eventsAPI } from '../../services/api';
 import { API_BASE_URL } from '../../config/apiConfig';
 
@@ -9,10 +9,7 @@ const EventManagement = () => {
   const [events, setEvents] = useState([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [showMembersModal, setShowMembersModal] = useState(false);
   const [currentEvent, setCurrentEvent] = useState(null);
-  const [eventMembers, setEventMembers] = useState([]);
-  const [loadingMembers, setLoadingMembers] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -296,39 +293,6 @@ const EventManagement = () => {
     }
   };
 
-  // Add new function to fetch members for an event
-  const fetchEventMembers = async (eventId) => {
-    setLoadingMembers(true);
-    try {
-      console.log('Fetching members for event:', eventId);
-      const response = await eventsAPI.getEventMembers(eventId);
-      console.log('Event members response:', response);
-      
-      let membersList = [];
-      if (response.data && response.data.members) {
-        membersList = response.data.members;
-      } else if (Array.isArray(response.data)) {
-        membersList = response.data;
-      } else if (response.members && Array.isArray(response.members)) {
-        membersList = response.members;
-      }
-      
-      setEventMembers(membersList);
-    } catch (err) {
-      console.error('Failed to fetch event members:', err);
-      setEventMembers([]);
-    } finally {
-      setLoadingMembers(false);
-    }
-  };
-
-  // New function to handle opening members modal
-  const openMembersModal = (event) => {
-    setCurrentEvent(event);
-    setShowMembersModal(true);
-    fetchEventMembers(event._id || event.id);
-  };
-
   return (
     <div className="container mx-auto p-4">
       <div className="flex justify-between items-center mb-6">
@@ -347,7 +311,7 @@ const EventManagement = () => {
         </div>
       )}
 
-      {isLoading && !showCreateModal && !showEditModal && !showMembersModal ? (
+      {isLoading && !showCreateModal && !showEditModal ? (
         <div className="text-center py-4">Loading events...</div>
       ) : (
         <div className="grid grid-cols-1 gap-4">
@@ -359,7 +323,7 @@ const EventManagement = () => {
               return (
                 <div key={event._id || event.id} className="bg-white rounded-lg shadow-md p-4 border border-gray-200">
                   <div className="flex justify-between items-start">
-                    <div className="flex-1 cursor-pointer" onClick={() => openMembersModal(event)}>
+                    <div>
                       <div className="flex items-center mb-2">
                         <h2 className="text-xl font-semibold text-gray-800 mr-3">{event.title}</h2>
                         <span className={`text-xs px-2 py-1 rounded ${getStatusColor(status)}`}>
@@ -403,35 +367,26 @@ const EventManagement = () => {
                       </button>
                     </div>
                   </div>
-                  <div className="flex justify-between items-center mt-2">
-                    {event.image && (
-                      <div className="flex items-center text-blue-600">
-                        <FaPaperclip className="mr-1" />
-                        <a href={event.image.startsWith('http') 
-                          ? event.image 
-                          : `${API_BASE_URL}${event.image}`} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            const imageUrl = event.image.startsWith('http') 
-                              ? event.image 
-                              : `${API_BASE_URL}${event.image}`;
-                            window.open(imageUrl, '_blank');
-                          }}
-                        >
-                          View Image
-                        </a>
-                      </div>
-                    )}
-                    <button
-                      onClick={() => openMembersModal(event)}
-                      className="text-violet-600 hover:text-violet-800 flex items-center"
-                    >
-                      <FaUsers className="mr-1" />
-                      <span>View Members ({event.registeredUsers?.length || 0})</span>
-                    </button>
-                  </div>
+                  {event.image && (
+                    <div className="mt-3 flex items-center text-blue-600">
+                      <FaPaperclip className="mr-1" />
+                      <a href={event.image.startsWith('http') 
+                        ? event.image 
+                        : `${API_BASE_URL}${event.image}`} 
+                       target="_blank" 
+                       rel="noopener noreferrer"
+                       onClick={(e) => {
+                         e.preventDefault();
+                         const imageUrl = event.image.startsWith('http') 
+                           ? event.image 
+                           : `${API_BASE_URL}${event.image}`;
+                         window.open(imageUrl, '_blank');
+                       }}
+                     >
+                       View Image
+                     </a>
+                    </div>
+                  )}
                 </div>
               );
             })
@@ -723,57 +678,6 @@ const EventManagement = () => {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* Members Modal */}
-      {showMembersModal && currentEvent && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-lg">
-            <h2 className="text-xl font-bold mb-4">
-              Members Registered for: {currentEvent.title}
-            </h2>
-            
-            {loadingMembers ? (
-              <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-violet-700 mx-auto"></div>
-                <p className="mt-2 text-gray-600">Loading members...</p>
-              </div>
-            ) : (
-              <div className="max-h-80 overflow-y-auto">
-                {eventMembers.length === 0 ? (
-                  <p className="text-center py-4 text-gray-500">No members have registered for this event yet.</p>
-                ) : (
-                  <ul className="divide-y divide-gray-200">
-                    {eventMembers.map((member) => (
-                      <li key={member._id || member.id} className="py-3">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0">
-                            <div className="w-10 h-10 rounded-full bg-violet-100 flex items-center justify-center text-violet-800">
-                              <FaUser />
-                            </div>
-                          </div>
-                          <div className="ml-4">
-                            <p className="text-sm font-medium text-gray-900">{member.name || member.username}</p>
-                            <p className="text-sm text-gray-500">{member.email}</p>
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-            
-            <div className="mt-6 flex justify-end">
-              <button
-                onClick={() => setShowMembersModal(false)}
-                className="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded"
-              >
-                Close
-              </button>
-            </div>
           </div>
         </div>
       )}
