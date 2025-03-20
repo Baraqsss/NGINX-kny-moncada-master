@@ -7,7 +7,7 @@ import User from '../models/userModel.js';
 dotenv.config();
 
 // Connect to MongoDB
-mongoose.connect('mongodb://127.0.0.1:27017/kny-moncada', { useNewUrlParser: true, useUnifiedTopology: true })
+mongoose.connect('mongodb+srv://SAAVEDRA:<db_password>@cluster0.fsctl.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0', { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log('MongoDB Connected'.cyan.underline))
   .catch(err => {
     console.error(`Error: ${err.message}`.red.bold);

@@ -1,5 +1,5 @@
 // API base URL - adjust port if needed
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://nginx-kny-moncada-master.onrender.com/api';
 
 // Possible backend ports to try (in order of preference)
 const POSSIBLE_PORTS = [5000, 50001, 3000, 8000, 8080];

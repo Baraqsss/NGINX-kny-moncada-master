@@ -27,7 +27,13 @@ let currentEndpoints = {
 // Initialize API URL
 const initializeApiUrl = async () => {
   try {
-    // Try to find the correct port
+    // Skip port checking if we're in production (using deployed URL)
+    if (import.meta.env.PROD) {
+      console.log(`Using production API URL: ${apiUrl}`);
+      return;
+    }
+    
+    // Try to find the correct port (only in development)
     const port = await findBackendPort();
     const newApiUrl = getApiUrl(port);
     
