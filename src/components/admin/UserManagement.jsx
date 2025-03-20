@@ -28,12 +28,25 @@ const UserManagement = () => {
     try {
       console.log('Fetching users...');
       
+      // Check if token exists
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('No authentication token found. Please log in again.');
+      }
+      
       // Direct API call to ensure we get the real data
-      const response = await fetch('http://localhost:50001/api/users', {
+      const response = await fetch('http://localhost:5000/api/users', {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
       });
+      
+      if (response.status === 401) {
+        // Token is invalid or expired
+        localStorage.removeItem('token'); // Clear invalid token
+        throw new Error('Your session has expired. Please log in again.');
+      }
       
       if (!response.ok) {
         throw new Error(`Failed to fetch users: ${response.status} ${response.statusText}`);
@@ -59,6 +72,11 @@ const UserManagement = () => {
     } catch (err) {
       console.error('Failed to fetch users:', err);
       setError('Failed to fetch users: ' + (err.message || 'Unknown error'));
+      // If it's an authentication error, redirect to login
+      if (err.message.includes('Please log in again')) {
+        // You might want to redirect to login page here
+        window.location.href = '/login';
+      }
     } finally {
       setIsLoading(false);
     }
@@ -70,7 +88,7 @@ const UserManagement = () => {
       console.log(`Approving user with ID: ${userId}`);
       
       // Direct API call to approve user
-      const response = await fetch(`http://localhost:50001/api/users/${userId}/approve`, {
+      const response = await fetch(`http://localhost:5000/api/users/${userId}/approve`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -104,7 +122,7 @@ const UserManagement = () => {
       console.log(`Rejecting user with ID: ${userId}`);
       
       // Direct API call to reject user
-      const response = await fetch(`http://localhost:50001/api/users/${userId}/reject`, {
+      const response = await fetch(`http://localhost:5000/api/users/${userId}/reject`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -140,7 +158,7 @@ const UserManagement = () => {
         console.log(`Deleting user with ID: ${userId}`);
         
         // Direct API call to delete user
-        const response = await fetch(`http://localhost:50001/api/users/${userId}`, {
+        const response = await fetch(`http://localhost:5000/api/users/${userId}`, {
           method: 'DELETE',
           headers: {
             Authorization: `Bearer ${localStorage.getItem('token')}`
@@ -172,7 +190,7 @@ const UserManagement = () => {
       console.log(`Updating user ${userId} role to ${newRole}`);
       
       // Direct API call to update user role
-      const response = await fetch(`http://localhost:50001/api/users/${userId}/role`, {
+      const response = await fetch(`http://localhost:5000/api/users/${userId}/role`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
