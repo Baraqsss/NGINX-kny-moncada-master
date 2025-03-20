@@ -29,7 +29,7 @@ const UserManagement = () => {
       console.log('Fetching users...');
       
       // Direct API call to ensure we get the real data
-      const response = await fetch('http://localhost:50001/api/users', {
+      const response = await fetch('http://localhost:5000/api/users', {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('token')}`
         }
