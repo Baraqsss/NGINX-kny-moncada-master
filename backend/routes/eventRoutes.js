@@ -28,4 +28,6 @@ router.route('/:id')
   .patch(upload.single('image'), eventController.updateEvent)
   .delete(eventController.deleteEvent);
 
+router.route('/:id/members').get(eventController.getEventMembers);
+
 export default router; 

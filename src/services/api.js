@@ -345,6 +345,8 @@ export const eventsAPI = {
   deleteEvent: (id) => fetchAPI(`/events/${id}`, {
     method: 'DELETE',
   }),
+  
+  getEventMembers: (id) => fetchAPI(`/events/${id}/members`),
 };
 
 // Announcements API calls
